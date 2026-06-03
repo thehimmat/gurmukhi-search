@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import SearchBar from '@/components/SearchBar';
 import ModeSelector from '@/components/ModeSelector';
 import FilterPanel from '@/components/FilterPanel';
@@ -21,7 +22,18 @@ type SearchState = {
 };
 
 export default function Home() {
-  const [query, setQuery] = useState('');
+  return (
+    <Suspense>
+      <SearchPage />
+    </Suspense>
+  );
+}
+
+function SearchPage() {
+  const searchParams = useSearchParams();
+  const initialQuery = searchParams.get('q') ?? '';
+
+  const [query, setQuery] = useState(initialQuery);
   const [mode, setMode] = useState<Mode>('contains');
   const [filters, setFilters] = useState<SearchFilters>({});
   const [raags, setRaags] = useState<string[]>([]);
@@ -45,6 +57,14 @@ export default function Home() {
         setWriters(writers);
       })
       .catch(() => {});
+  }, []);
+
+  // Auto-run search when a ?q= param is present on initial load
+  useEffect(() => {
+    if (initialQuery.trim()) {
+      runSearch(initialQuery, 'contains', {}, 0);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const runSearch = useCallback(async (q: string, m: Mode, f: SearchFilters, page: number) => {
