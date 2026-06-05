@@ -22,8 +22,8 @@ Next.js search app for Gurbani — reads from the gurmukhi-kosh Supabase DB (sam
 ## Shared Gurmukhi Input Package
 Keyboard transliteration lives in the suite-level shared package, **not** in this app.
 
-- Package: `@gurmukhi/input` — linked via npm workspaces from `../shared/gurmukhi-input/`
-- Import: `import { useGurmukhiInput, GurmukhiInput } from '@gurmukhi/input'`
+- Package: `@atthebunga/gurmukhi-input` — linked via npm workspaces from `../shared/gurmukhi-input/`
+- Import: `import { useGurmukhiInput, GurmukhiInput } from '@atthebunga/gurmukhi-input'`
 - Source files: `../shared/gurmukhi-input/` (keymap, hook, component)
 - To modify the keyboard mapping: edit `../shared/gurmukhi-input/keymap.ts`
 - To add the hook to a new input: `const { onKeyDown, onPaste } = useGurmukhiInput({ value, onChange })`
@@ -33,7 +33,7 @@ The `SearchBar` component uses `useGurmukhiInput` directly. Transliteration is a
 
 ## Key Files
 - `lib/gurmukhi-chars.ts` — Gurmukhi character taxonomy and semi-wildcard categories
-- `lib/roman-to-gurmukhi.ts` — legacy igurbani mapping (superseded by `@gurmukhi/input`; kept for reference)
+- `lib/roman-to-gurmukhi.ts` — legacy igurbani mapping (superseded by `@atthebunga/gurmukhi-input`; kept for reference)
 - `lib/pattern-compiler.ts` — wildcard pattern → PostgreSQL regex
 - `lib/search.ts` — Supabase query builders for each mode
 - `supabase/migrations/001_search_functions.sql` — `search_lines_regex` + `search_first_letters` PL/pgSQL functions

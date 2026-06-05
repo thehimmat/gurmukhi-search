@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef } from 'react';
-import { useGurmukhiInput } from '@gurmukhi/input';
+import { useGurmukhiInput } from '@atthebunga/gurmukhi-input';
 
 type Props = {
   value: string;
