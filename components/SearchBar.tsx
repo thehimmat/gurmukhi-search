@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useGurmukhiInput } from '@atthebunga/gurmukhi-input';
 
 type Props = {
@@ -11,12 +11,35 @@ type Props = {
   placeholder?: string;
 };
 
+type KeyLayout = 'gurmukhi-qwerty' | 'igurbani';
+
+const LAYOUT_STORAGE_KEY = 'gurmukhi-input-layout';
+
+const LAYOUT_OPTIONS: { key: KeyLayout; label: string; hint: string }[] = [
+  { key: 'gurmukhi-qwerty', label: 'Gurmukhi Keyboard', hint: 'macOS Gurmukhi - QWERTY layout (t→ਤ, ⌥t→ਟ)' },
+  { key: 'igurbani',        label: 'igurbani',           hint: 'igurbani.com phonetic layout (t→ਟ, d→ਡ)' },
+];
+
 export default function SearchBar({ value, onChange, onSubmit, mode, placeholder }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [layout, setLayout] = useState<KeyLayout>('gurmukhi-qwerty');
+
+  // Restore the saved layout preference on mount
+  useEffect(() => {
+    const saved = localStorage.getItem(LAYOUT_STORAGE_KEY);
+    if (saved === 'gurmukhi-qwerty' || saved === 'igurbani') setLayout(saved);
+  }, []);
+
+  function chooseLayout(next: KeyLayout) {
+    setLayout(next);
+    localStorage.setItem(LAYOUT_STORAGE_KEY, next);
+    inputRef.current?.focus();
+  }
 
   const { onKeyDown, onPaste } = useGurmukhiInput({
     value,
     onChange,
+    layout,
     patternMode: mode === 'pattern',
   });
 
@@ -30,10 +53,12 @@ export default function SearchBar({ value, onChange, onSubmit, mode, placeholder
   }
 
   const hints: Record<typeof mode, string> = {
-    contains:     'Type Gurmukhi or use phonetic keys — s→ਸ, j→ਜ, k→ਕ, d→ਦ, x→ੜ …',
+    contains:     'Type Gurmukhi, or type phonetically — no Gurmukhi keyboard needed',
     first_letter: 'Type first letter of each word — p n k → ਪ ਨ ਕ',
     pattern:      'Use _ (any char), * (any sequence), {nasal}, {bilabial}, etc.',
   };
+
+  const activeHint = LAYOUT_OPTIONS.find(o => o.key === layout)?.hint ?? '';
 
   return (
     <div className="flex flex-col gap-2">
@@ -69,9 +94,27 @@ export default function SearchBar({ value, onChange, onSubmit, mode, placeholder
           Search
         </button>
       </div>
-      <p className="text-xs text-[#7a6045] italic opacity-80">
-        {hints[mode]}
-      </p>
+
+      {/* Keyboard layout switch */}
+      <div className="flex flex-wrap items-center gap-2 text-sm text-[#7a6045]">
+        <span className="text-xs uppercase tracking-wide text-[#a0896a]">Keyboard</span>
+        <div className="inline-flex rounded-md border border-[#c8b89a] bg-[#f5ede0] p-0.5">
+          {LAYOUT_OPTIONS.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => chooseLayout(key)}
+              className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                layout === key
+                  ? 'bg-white text-[#5c3d1e] shadow-sm'
+                  : 'text-[#a0896a] hover:text-[#5c3d1e]'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <span className="text-xs italic opacity-70">{activeHint}</span>
+      </div>
     </div>
   );
 }
