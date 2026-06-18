@@ -3,6 +3,8 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import SearchBar from '@/components/SearchBar';
+import { useGurmukhiInput } from '@atthebunga/gurmukhi-input';
+import { useKeyboardLayout, KeyboardLayoutSwitch } from '@/components/KeyboardLayoutSwitch';
 import ModeSelector from '@/components/ModeSelector';
 import FilterPanel from '@/components/FilterPanel';
 import ResultCard from '@/components/ResultCard';
@@ -78,10 +80,13 @@ function SegmentedControl({ value, onChange }: { value: AppMode; onChange: (v: A
 
 function KoshSearch() {
   const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Word[]>([]);
   const [loading, setLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { layout, choose } = useKeyboardLayout();
+  const { onKeyDown, onPaste } = useGurmukhiInput({ value: query, onChange: setQuery, layout });
 
   useEffect(() => {
     if (!query.trim()) { setResults([]); return; }
@@ -113,9 +118,12 @@ function KoshSearch() {
 
       <form onSubmit={handleSubmit} style={{ position: 'relative', marginBottom: '0.5rem' }}>
         <input
+          ref={inputRef}
           className="gurmukhi"
           value={query}
           onChange={e => setQuery(e.target.value)}
+          onKeyDown={onKeyDown}
+          onPaste={onPaste}
           placeholder="ਸ਼ਬਦ ਖੋਜੋ — search a word…"
           autoFocus
           style={{
@@ -134,6 +142,13 @@ function KoshSearch() {
           onBlur={e => (e.target.style.borderColor = 'var(--border)')}
         />
       </form>
+
+      <div style={{ marginBottom: '0.5rem' }}>
+        <KeyboardLayoutSwitch
+          layout={layout}
+          onChange={next => { choose(next); inputRef.current?.focus(); }}
+        />
+      </div>
 
       {loading && (
         <p style={{ color: 'var(--text-secondary)', fontFamily: '"Inter", sans-serif', fontSize: '0.875rem', padding: '0.5rem 0.25rem' }}>
