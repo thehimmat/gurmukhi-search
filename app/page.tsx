@@ -316,7 +316,10 @@ function SearchPage() {
   }, []);
 
   function handleSubmit() { runSearch(query, searchMode, filters, 0); }
-  function handleLoadMore() { runSearch(state.committedQuery, searchMode, filters, state.page + 1); }
+  function handleLoadMore() {
+    if (state.loading) return;
+    runSearch(state.committedQuery, searchMode, filters, state.page + 1);
+  }
 
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
@@ -433,21 +436,26 @@ function SearchPage() {
               </div>
             )}
 
-            {hasMore && !state.loading && (
+            {/* Load-more button stays mounted while loading so the click target
+                isn't removed mid-click (which would drop focus and jump scroll). */}
+            {hasMore && (
               <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
                 <button
+                  type="button"
                   onClick={handleLoadMore}
-                  style={{ padding: '0.6rem 1.5rem', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '6px', fontFamily: '"Inter", sans-serif', fontSize: '0.875rem', fontWeight: 500, cursor: 'pointer' }}
+                  aria-busy={state.loading}
+                  className={state.loading ? 'animate-pulse' : undefined}
+                  style={{ padding: '0.6rem 1.5rem', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '6px', fontFamily: '"Inter", sans-serif', fontSize: '0.875rem', fontWeight: 500, cursor: state.loading ? 'default' : 'pointer', opacity: state.loading ? 0.7 : 1 }}
                 >
-                  Load {Math.min(PAGE_SIZE, total - showed)} more
-                  <span style={{ marginLeft: '0.4rem', opacity: 0.7, fontSize: '0.8rem' }}>({(total - showed).toLocaleString()} remaining)</span>
+                  {state.loading ? (
+                    'Loading…'
+                  ) : (
+                    <>
+                      Load {Math.min(PAGE_SIZE, total - showed)} more
+                      <span style={{ marginLeft: '0.4rem', opacity: 0.7, fontSize: '0.8rem' }}>({(total - showed).toLocaleString()} remaining)</span>
+                    </>
+                  )}
                 </button>
-              </div>
-            )}
-
-            {state.loading && hasResults && (
-              <div style={{ marginTop: '1.5rem', textAlign: 'center', fontFamily: '"Inter", sans-serif', fontSize: '0.875rem', color: 'var(--accent)' }} className="animate-pulse">
-                Loading more…
               </div>
             )}
 
