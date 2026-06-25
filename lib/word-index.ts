@@ -16,7 +16,10 @@ async function fetchAllWords(): Promise<Word[]> {
     const { data, error } = await supabase
       .from('words')
       .select('id, gurmukhi, frequency')
+      // Secondary sort by id gives a *stable* total order so ranged pagination
+      // never duplicates or skips rows that share a frequency.
       .order('frequency', { ascending: false })
+      .order('id', { ascending: true })
       .range(from, from + CHUNK - 1);
     if (error) throw new Error(error.message);
     const rows = (data ?? []) as Word[];
