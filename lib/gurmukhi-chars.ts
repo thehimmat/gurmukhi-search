@@ -66,3 +66,67 @@ export function isCombiningMark(ch: string): boolean {
 export function isBaseChar(ch: string): boolean {
   return BASE_CHARS.includes(ch);
 }
+
+// ─── Mukta (inherent vowel) ───────────────────────────────────────────────────
+// Gurmukhi is an alphasyllabary: a base consonant with no attached vowel sign
+// carries the inherent vowel (mukta / schwa, /ə/). We render that "no sign" state
+// with the schwa symbol so it can sit alongside the real matras in the UI.
+export const MUKTA_SYMBOL = 'ə';
+
+// The attachable vowel signs (matras), in teaching order, with display names.
+// Used to build the vowel-selection chips in the Letter Set builder.
+export const VOWEL_SIGN_OPTIONS: { sign: string; name: string }[] = [
+  { sign: 'ਾ', name: 'kanna (aa)' },
+  { sign: 'ਿ', name: 'sihari (i)' },
+  { sign: 'ੀ', name: 'bihari (ee)' },
+  { sign: 'ੁ', name: 'aunkar (u)' },
+  { sign: 'ੂ', name: 'dulankar (oo)' },
+  { sign: 'ੇ', name: 'lavan (e)' },
+  { sign: 'ੈ', name: 'dulavan (ai)' },
+  { sign: 'ੋ', name: 'hora (o)' },
+  { sign: 'ੌ', name: 'kanaura (au)' },
+];
+
+// ─── Syllable parsing ─────────────────────────────────────────────────────────
+// A Gurmukhi "letter" for word-game purposes is an akhar: a base character plus
+// its trailing combining marks (vowel sign, nasal mark, addak, virama, …).
+// `vowelSign` is the first attached matra, or null for mukta (no vowel sign).
+export type Syllable = {
+  base: string;
+  vowelSign: string | null;
+  marks: string[];
+};
+
+// Split a Gurmukhi word into akhar syllables. Iterates by codepoint; each base
+// character starts a new syllable and following combining marks attach to it.
+// Conjuncts (virama-joined consonants) are split into separate syllables, with
+// the virama recorded as a mark on the preceding base.
+export function parseSyllables(word: string): Syllable[] {
+  const syllables: Syllable[] = [];
+  let current: Syllable | null = null;
+
+  for (const ch of word) {
+    if (isBaseChar(ch)) {
+      current = { base: ch, vowelSign: null, marks: [] };
+      syllables.push(current);
+    } else if (VOWEL_DIACRITICS.includes(ch)) {
+      if (!current) {
+        current = { base: '', vowelSign: ch, marks: [ch] };
+        syllables.push(current);
+      } else {
+        if (current.vowelSign === null) current.vowelSign = ch;
+        current.marks.push(ch);
+      }
+    } else {
+      // Any other combining mark (nasal, addak, virama, visarg, nukta, …)
+      if (!current) {
+        current = { base: '', vowelSign: null, marks: [ch] };
+        syllables.push(current);
+      } else {
+        current.marks.push(ch);
+      }
+    }
+  }
+
+  return syllables;
+}
