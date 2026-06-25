@@ -3,36 +3,60 @@ import {
   searchContains,
   searchFirstLetters,
   searchPattern,
+  searchLetterSet,
   PAGE_SIZE,
 } from '@/lib/search';
 import { SearchFilters } from '@/lib/supabase';
+import { LetterSetQuery, ExtraMode, Scope, VowelMode } from '@/lib/letterset';
 
 export const runtime = 'nodejs';
+
+// Parse the structured Letter Set query out of the request params.
+function parseLetterSet(sp: URLSearchParams): LetterSetQuery {
+  const splitChars = (s: string) => [...s].filter((c) => c.trim().length > 0);
+  return {
+    letters: (sp.get('letters') ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+    repeat: sp.get('repeat') !== '0',
+    extra: (sp.get('extra') as ExtraMode) ?? 'none',
+    wildcardSlots: Math.max(1, Math.min(3, parseInt(sp.get('slots') ?? '2', 10))),
+    vowelMode: (sp.get('vmode') as VowelMode) ?? 'any',
+    vowels: {
+      mukta: sp.get('mukta') !== '0',
+      signs: splitChars(sp.get('vsigns') ?? ''),
+    },
+    scope: (sp.get('scope') as Scope) ?? 'word',
+  };
+}
 
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
 
-  const mode    = sp.get('mode') ?? 'contains';   // 'contains' | 'first_letter' | 'pattern'
-  const query   = sp.get('q') ?? '';
-  const page    = Math.max(0, parseInt(sp.get('page') ?? '0', 10));
+  const mode = sp.get('mode') ?? 'contains'; // contains | first_letter | pattern | letterset
+  const query = sp.get('q') ?? '';
+  const page = Math.max(0, parseInt(sp.get('page') ?? '0', 10));
+  const scope: Scope = sp.get('scope') === 'word' ? 'word' : 'line';
 
   const filters: SearchFilters = {
-    raag:    sp.get('raag')    ?? undefined,
-    writer:  sp.get('writer')  ?? undefined,
-    angMin:  sp.has('ang_min') ? parseInt(sp.get('ang_min')!, 10) : undefined,
-    angMax:  sp.has('ang_max') ? parseInt(sp.get('ang_max')!, 10) : undefined,
+    raag: sp.get('raag') ?? undefined,
+    writer: sp.get('writer') ?? undefined,
+    angMin: sp.has('ang_min') ? parseInt(sp.get('ang_min')!, 10) : undefined,
+    angMax: sp.has('ang_max') ? parseInt(sp.get('ang_max')!, 10) : undefined,
   };
 
-  if (!query.trim()) {
-    return NextResponse.json({ lines: [], total: 0, page, pageSize: PAGE_SIZE });
-  }
-
   let result;
-  if (mode === 'first_letter') {
+  if (mode === 'letterset') {
+    result = await searchLetterSet(parseLetterSet(sp), filters, page);
+  } else if (mode === 'first_letter') {
     result = await searchFirstLetters(query, filters, page);
   } else if (mode === 'pattern') {
-    result = await searchPattern(query, filters, page);
+    result = await searchPattern(query, filters, page, scope);
   } else {
+    if (!query.trim()) {
+      return NextResponse.json({ lines: [], total: 0, page, pageSize: PAGE_SIZE });
+    }
     result = await searchContains(query, filters, page);
   }
 
@@ -42,6 +66,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     lines: result.lines,
+    words: result.words ?? null,
     total: result.total,
     page,
     pageSize: PAGE_SIZE,

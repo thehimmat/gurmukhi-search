@@ -9,14 +9,19 @@ import ModeSelector from '@/components/ModeSelector';
 import FilterPanel from '@/components/FilterPanel';
 import ResultCard from '@/components/ResultCard';
 import PatternHelp from '@/components/PatternHelp';
+import ScopeToggle from '@/components/ScopeToggle';
+import LetterSetBuilder from '@/components/LetterSetBuilder';
+import WordList from '@/components/WordList';
 import { SearchFilters, LineWithMeta, Word } from '@/lib/supabase';
 import { PAGE_SIZE } from '@/lib/search';
+import { DEFAULT_LETTER_SET_QUERY, LetterSetQuery, Scope } from '@/lib/letterset';
 
-type SearchMode = 'contains' | 'first_letter' | 'pattern';
+type SearchMode = 'contains' | 'first_letter' | 'pattern' | 'letterset';
 type AppMode = 'gurbani' | 'kosh';
 
 type SearchState = {
   lines: LineWithMeta[];
+  words: Word[];
   total: number;
   page: number;
   loading: boolean;
@@ -205,11 +210,14 @@ function SearchPage() {
   const [appMode, setAppMode] = useState<AppMode>(initialMode);
   const [query, setQuery] = useState(initialQuery);
   const [searchMode, setSearchMode] = useState<SearchMode>('contains');
+  const [patternScope, setPatternScope] = useState<Scope>('line');
+  const [letterSet, setLetterSet] = useState<LetterSetQuery>(DEFAULT_LETTER_SET_QUERY);
   const [filters, setFilters] = useState<SearchFilters>({});
   const [raags, setRaags] = useState<string[]>([]);
   const [writers, setWriters] = useState<string[]>([]);
   const [state, setState] = useState<SearchState>({
     lines: [],
+    words: [],
     total: 0,
     page: 0,
     loading: false,
@@ -218,6 +226,11 @@ function SearchPage() {
   });
 
   const abortRef = useRef<AbortController | null>(null);
+  // Latest mode-specific inputs, so load-more / filter re-runs read fresh values.
+  const patternScopeRef = useRef(patternScope);
+  patternScopeRef.current = patternScope;
+  const letterSetRef = useRef(letterSet);
+  letterSetRef.current = letterSet;
 
   useEffect(() => {
     fetch('/api/meta')
@@ -237,8 +250,10 @@ function SearchPage() {
   }, []);
 
   const runSearch = useCallback(async (q: string, m: SearchMode, f: SearchFilters, page: number) => {
-    if (!q.trim()) {
-      setState(s => ({ ...s, lines: [], total: 0, error: null, loading: false, committedQuery: '' }));
+    const isLetterSet = m === 'letterset';
+    const empty = isLetterSet ? letterSetRef.current.letters.length === 0 : !q.trim();
+    if (empty) {
+      setState(s => ({ ...s, lines: [], words: [], total: 0, error: null, loading: false, committedQuery: '' }));
       return;
     }
 
@@ -250,16 +265,29 @@ function SearchPage() {
       ...s,
       loading: true,
       error: null,
-      ...(page === 0 ? { lines: [], total: 0 } : {}),
+      ...(page === 0 ? { lines: [], words: [], total: 0 } : {}),
     }));
 
-    const params = new URLSearchParams({
-      q, mode: m, page: String(page),
-      ...(f.raag   ? { raag:    f.raag }                  : {}),
-      ...(f.writer ? { writer:  f.writer }                 : {}),
-      ...(f.angMin != null ? { ang_min: String(f.angMin) } : {}),
-      ...(f.angMax != null ? { ang_max: String(f.angMax) } : {}),
-    });
+    const params = new URLSearchParams({ mode: m, page: String(page) });
+    if (f.raag) params.set('raag', f.raag);
+    if (f.writer) params.set('writer', f.writer);
+    if (f.angMin != null) params.set('ang_min', String(f.angMin));
+    if (f.angMax != null) params.set('ang_max', String(f.angMax));
+
+    if (isLetterSet) {
+      const ls = letterSetRef.current;
+      params.set('scope', ls.scope);
+      params.set('letters', ls.letters.join(','));
+      params.set('repeat', ls.repeat ? '1' : '0');
+      params.set('extra', ls.extra);
+      params.set('slots', String(ls.wildcardSlots));
+      params.set('vmode', ls.vowelMode);
+      params.set('vsigns', ls.vowels.signs.join(''));
+      params.set('mukta', ls.vowels.mukta ? '1' : '0');
+    } else {
+      params.set('q', q);
+      if (m === 'pattern') params.set('scope', patternScopeRef.current);
+    }
 
     try {
       const res = await fetch(`/api/search?${params}`, { signal: ctrl.signal });
@@ -275,8 +303,9 @@ function SearchPage() {
         error: null,
         total: json.total,
         page,
-        committedQuery: q,
-        lines: page === 0 ? json.lines : [...s.lines, ...json.lines],
+        committedQuery: isLetterSet ? 'letterset' : q,
+        lines: page === 0 ? (json.lines ?? []) : [...s.lines, ...(json.lines ?? [])],
+        words: page === 0 ? (json.words ?? []) : [...s.words, ...(json.words ?? [])],
       }));
     } catch (e) {
       if ((e as Error).name !== 'AbortError') {
@@ -297,10 +326,24 @@ function SearchPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
-  const hasResults = state.lines.length > 0;
-  const hasMore    = state.lines.length < state.total;
-  const showed     = state.lines.length;
+  // Toggling word/line scope re-runs the committed pattern search.
+  useEffect(() => {
+    if (state.committedQuery && searchMode === 'pattern') {
+      runSearch(state.committedQuery, 'pattern', filtersRef.current, 0);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patternScope]);
+
+  const displayScope: Scope =
+    searchMode === 'letterset' ? letterSet.scope
+    : searchMode === 'pattern' ? patternScope
+    : 'line';
+  const showingWords = displayScope === 'word';
+  const items      = showingWords ? state.words : state.lines;
+  const hasResults = items.length > 0;
+  const showed     = items.length;
   const total      = state.total;
+  const hasMore    = showed < total;
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100%' }}>
@@ -323,29 +366,36 @@ function SearchPage() {
               value={searchMode}
               onChange={m => {
                 setSearchMode(m);
-                setState(s => ({ ...s, lines: [], total: 0, error: null, committedQuery: '' }));
+                setState(s => ({ ...s, lines: [], words: [], total: 0, error: null, committedQuery: '' }));
               }}
             />
           </div>
 
           <div style={{ maxWidth: '860px', margin: '0 auto', padding: '0.75rem 1.5rem 0' }}>
-            <SearchBar
-              value={query}
-              onChange={setQuery}
-              onSubmit={handleSubmit}
-              mode={searchMode}
-            />
+            {searchMode === 'letterset' ? (
+              <LetterSetBuilder query={letterSet} onChange={setLetterSet} onSubmit={handleSubmit} />
+            ) : (
+              <SearchBar
+                value={query}
+                onChange={setQuery}
+                onSubmit={handleSubmit}
+                mode={searchMode}
+              />
+            )}
           </div>
 
           {searchMode === 'pattern' && (
-            <div style={{ maxWidth: '860px', margin: '0 auto', padding: '0 1.5rem' }}>
+            <div style={{ maxWidth: '860px', margin: '0 auto', padding: '0.5rem 1.5rem 0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
               <PatternHelp />
+              <ScopeToggle value={patternScope} onChange={setPatternScope} />
             </div>
           )}
 
-          <div style={{ maxWidth: '860px', margin: '0 auto', padding: '0.5rem 1.5rem' }}>
-            <FilterPanel filters={filters} onChange={setFilters} raags={raags} writers={writers} />
-          </div>
+          {!showingWords && (
+            <div style={{ maxWidth: '860px', margin: '0 auto', padding: '0.5rem 1.5rem' }}>
+              <FilterPanel filters={filters} onChange={setFilters} raags={raags} writers={writers} />
+            </div>
+          )}
 
           <div style={{ maxWidth: '860px', margin: '0 auto', padding: '0.5rem 1.5rem 3rem' }}>
             {(hasResults || state.loading) && (
@@ -364,15 +414,21 @@ function SearchPage() {
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {state.lines.map(line => (
-                <ResultCard key={line.id} line={line} query={state.committedQuery} mode={searchMode} />
-              ))}
+              {showingWords
+                ? hasResults && <WordList words={state.words} />
+                : state.lines.map(line => (
+                    <ResultCard key={line.id} line={line} query={state.committedQuery} mode={searchMode} />
+                  ))}
             </div>
 
             {!state.loading && state.committedQuery && !hasResults && !state.error && (
               <div style={{ textAlign: 'center', padding: '4rem 0', color: 'var(--text-secondary)' }}>
                 <p className="gurmukhi" style={{ fontSize: '2rem', marginBottom: '0.75rem', opacity: 0.4 }}>ਕੁਝ ਨਹੀਂ ਮਿਲਿਆ</p>
-                <p style={{ fontFamily: '"Inter", sans-serif', fontSize: '0.875rem' }}>No results for &ldquo;{state.committedQuery}&rdquo;</p>
+                <p style={{ fontFamily: '"Inter", sans-serif', fontSize: '0.875rem' }}>
+                  {searchMode === 'letterset'
+                    ? 'No words match this letter set'
+                    : <>No results for &ldquo;{state.committedQuery}&rdquo;</>}
+                </p>
               </div>
             )}
 

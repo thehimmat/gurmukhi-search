@@ -1,6 +1,6 @@
 'use client';
 
-type Mode = 'contains' | 'first_letter' | 'pattern';
+type Mode = 'contains' | 'first_letter' | 'pattern' | 'letterset';
 
 type Props = {
   value: Mode;
@@ -22,6 +22,11 @@ const MODES: { id: Mode; label: string; desc: string }[] = [
     id: 'pattern',
     label: 'Pattern',
     desc: 'Wildcard search: _, *, {nasal}, {bilabial}, etc.',
+  },
+  {
+    id: 'letterset',
+    label: 'Letter Set',
+    desc: 'Find words built from a set of letters — like Scrabble or Boggle',
   },
 ];
 

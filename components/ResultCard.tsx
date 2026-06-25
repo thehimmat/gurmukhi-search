@@ -5,7 +5,7 @@ import { LineWithMeta } from '@/lib/supabase';
 type Props = {
   line: LineWithMeta;
   query: string;
-  mode: 'contains' | 'first_letter' | 'pattern';
+  mode: 'contains' | 'first_letter' | 'pattern' | 'letterset';
 };
 
 // Highlight occurrences of `needle` in `text` by wrapping them in <mark>.
