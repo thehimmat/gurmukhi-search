@@ -27,6 +27,7 @@ function parseLetterSet(sp: URLSearchParams): LetterSetQuery {
       mukta: sp.get('mukta') !== '0',
       signs: splitChars(sp.get('vsigns') ?? ''),
     },
+    allowNasalAddak: sp.get('nasal') !== '0',
     scope: (sp.get('scope') as Scope) ?? 'word',
   };
 }

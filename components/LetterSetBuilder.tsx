@@ -217,6 +217,19 @@ export default function LetterSetBuilder({ query, onChange, onSubmit }: Props) {
         Letters may repeat
       </label>
 
+      {/* Nasalization & addak */}
+      <label
+        className="flex items-center gap-1.5 text-sm text-[#5c3d1e]"
+        title="When on, nasalization (ਂ/ੰ) and addak (ੱ) are transparent — a nasalized or geminated rack letter still counts as that letter."
+      >
+        <input
+          type="checkbox"
+          checked={query.allowNasalAddak}
+          onChange={(e) => onChange({ ...query, allowNasalAddak: e.target.checked })}
+        />
+        Allow nasalization &amp; addak
+      </label>
+
       {/* Live summary + submit */}
       <div className="flex items-center justify-between gap-3 border-t border-[#e8d8c0] pt-3">
         <p className="text-sm italic text-[#7a6045]">{describeLetterSet(query)}</p>

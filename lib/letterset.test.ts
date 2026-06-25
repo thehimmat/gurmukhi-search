@@ -17,6 +17,7 @@ function q(overrides: Partial<LetterSetQuery> = {}): LetterSetQuery {
     wildcardSlots: 2,
     vowelMode: 'any',
     vowels: { mukta: true, signs: ['ਾ', 'ਿ', 'ੀ'] },
+    allowNasalAddak: true,
     scope: 'word',
     ...overrides,
   };
@@ -113,6 +114,27 @@ describe('matchesLetterSet — limited wildcards', () => {
 
   it('requires at least one rack letter to be present', () => {
     expect(matchesLetterSet('ਨ', oneBlank)).toBe(false); // only a blank, no rack
+  });
+});
+
+describe('matchesLetterSet — nasalization & addak toggle', () => {
+  // ਹਾਂ = ਹ + ਾ + bindi;  ਸੱਚ = ਸ + addak + ਚ
+  it('counts nasalized/geminated rack letters when allowNasalAddak is true', () => {
+    expect(matchesLetterSet('ਹਾਂ', q({ allowNasalAddak: true }))).toBe(true);
+    expect(matchesLetterSet('ਸੱਚ', q({ allowNasalAddak: true }))).toBe(true);
+  });
+
+  it('excludes them from "only these letters" when allowNasalAddak is false', () => {
+    expect(matchesLetterSet('ਹਾਂ', q({ allowNasalAddak: false }))).toBe(false);
+    expect(matchesLetterSet('ਸੱਚ', q({ allowNasalAddak: false }))).toBe(false);
+    // plain forms without the marks still match
+    expect(matchesLetterSet('ਸਚ', q({ allowNasalAddak: false }))).toBe(true);
+  });
+
+  it('treats a nasal/addak syllable as one wildcard when allowNasalAddak is false', () => {
+    expect(
+      matchesLetterSet('ਸੱਚ', q({ allowNasalAddak: false, extra: 'limited', wildcardSlots: 1 })),
+    ).toBe(true);
   });
 });
 

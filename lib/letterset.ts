@@ -7,7 +7,7 @@
 // lets us express counting rules (no-repeats, wildcard budgets) and the
 // alphasyllabary vowel rules precisely, and makes it trivially unit-testable.
 
-import { parseSyllables } from './gurmukhi-chars';
+import { parseSyllables, Syllable, NASAL_MARKS, ADDAK } from './gurmukhi-chars';
 
 export type VowelMode = 'any' | 'only';
 // What may appear besides the rack letters:
@@ -24,6 +24,10 @@ export type LetterSetQuery = {
   wildcardSlots: number; // blanks allowed when extra === 'limited' (1..3)
   vowelMode: VowelMode;
   vowels: { mukta: boolean; signs: string[] }; // used when vowelMode === 'only'
+  // When true (default), nasalization (bindi/tippi) and addak are treated as
+  // transparent diacritics — a nasalized/geminated rack letter still counts.
+  // When false, any such mark makes a syllable fall outside "only these letters".
+  allowNasalAddak: boolean;
   scope: Scope;
 };
 
@@ -37,6 +41,7 @@ export const DEFAULT_LETTER_SET_QUERY: LetterSetQuery = {
   wildcardSlots: 2,
   vowelMode: 'any',
   vowels: { mukta: true, signs: ['ਾ', 'ਿ', 'ੀ'] },
+  allowNasalAddak: true,
   scope: 'word',
 };
 
@@ -61,6 +66,11 @@ function vowelAllowed(vowelSign: string | null, q: LetterSetQuery): boolean {
   return q.vowels.signs.includes(vowelSign);
 }
 
+// Does the syllable carry a nasal mark (bindi/tippi) or addak?
+function hasNasalOrAddak(syl: Syllable): boolean {
+  return syl.marks.some((m) => NASAL_MARKS.includes(m) || m === ADDAK);
+}
+
 // Core predicate. Returns true if `word` satisfies the letter-set query.
 export function matchesLetterSet(word: string, q: LetterSetQuery): boolean {
   if (!validateLetterSet(q).ok) return false;
@@ -75,7 +85,10 @@ export function matchesLetterSet(word: string, q: LetterSetQuery): boolean {
   const cleanUsage = new Map<string, number>(); // rack letter → clean-use count
 
   for (const syl of syllables) {
-    const clean = rack.has(syl.base) && vowelAllowed(syl.vowelSign, q);
+    const clean =
+      rack.has(syl.base) &&
+      vowelAllowed(syl.vowelSign, q) &&
+      (q.allowNasalAddak || !hasNasalOrAddak(syl));
     if (clean) {
       cleanCount++;
       cleanUsage.set(syl.base, (cleanUsage.get(syl.base) ?? 0) + 1);
