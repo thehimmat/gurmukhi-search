@@ -108,6 +108,14 @@ export default function LetterSetBuilder({ query, onChange, onSubmit }: Props) {
           />
         </div>
         <KeyboardLayoutSwitch layout={layout} onChange={(n) => { choose(n); inputRef.current?.focus(); }} />
+        <label className="flex items-center gap-1.5 text-sm text-[#5c3d1e]">
+          <input
+            type="checkbox"
+            checked={query.requireAllConsonants}
+            onChange={(e) => onChange({ ...query, requireAllConsonants: e.target.checked })}
+          />
+          Must include all these consonants
+        </label>
       </div>
 
       {/* Scope */}
@@ -137,6 +145,7 @@ export default function LetterSetBuilder({ query, onChange, onSubmit }: Props) {
           </label>
         </div>
         {query.vowelMode === 'only' && (
+          <>
           <div className="flex flex-wrap gap-2 pt-1">
             <button
               onClick={() => onChange({ ...query, vowels: { ...query.vowels, mukta: !query.vowels.mukta } })}
@@ -169,6 +178,15 @@ export default function LetterSetBuilder({ query, onChange, onSubmit }: Props) {
               );
             })}
           </div>
+          <label className="flex items-center gap-1.5 text-sm text-[#5c3d1e]">
+            <input
+              type="checkbox"
+              checked={query.requireAllVowels}
+              onChange={(e) => onChange({ ...query, requireAllVowels: e.target.checked })}
+            />
+            Must include all these vowels
+          </label>
+          </>
         )}
       </fieldset>
 

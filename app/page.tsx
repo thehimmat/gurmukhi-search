@@ -284,6 +284,8 @@ function SearchPage() {
       params.set('vmode', ls.vowelMode);
       params.set('vsigns', ls.vowels.signs.join(''));
       params.set('mukta', ls.vowels.mukta ? '1' : '0');
+      params.set('reqcons', ls.requireAllConsonants ? '1' : '0');
+      params.set('reqvowels', ls.requireAllVowels ? '1' : '0');
       params.set('nasal', ls.allowNasalAddak ? '1' : '0');
     } else {
       params.set('q', q);

@@ -17,6 +17,8 @@ function q(overrides: Partial<LetterSetQuery> = {}): LetterSetQuery {
     wildcardSlots: 2,
     vowelMode: 'any',
     vowels: { mukta: true, signs: ['ਾ', 'ਿ', 'ੀ'] },
+    requireAllConsonants: false,
+    requireAllVowels: false,
     allowNasalAddak: true,
     scope: 'word',
     ...overrides,
@@ -141,13 +143,42 @@ describe('matchesLetterSet — nasalization & addak toggle', () => {
 describe('matchesLetterSet — unlimited', () => {
   const anyOrder = q({ extra: 'unlimited' });
 
-  it('requires every rack letter to appear, allows others', () => {
+  it('matches words that use at least one rack letter, allowing others', () => {
     expect(matchesLetterSet('ਚਸਹਨ', anyOrder)).toBe(true); // all three + ਨ
-    expect(matchesLetterSet('ਨਚਾਸਹਮ', anyOrder)).toBe(true); // all three + extras
+    expect(matchesLetterSet('ਸਹਨ', anyOrder)).toBe(true); // ਸ,ਹ present (+ ਨ)
   });
 
-  it('rejects when a rack letter is missing', () => {
-    expect(matchesLetterSet('ਸਹਨ', anyOrder)).toBe(false); // no ਚ
+  it('rejects words that contain none of the rack letters', () => {
+    expect(matchesLetterSet('ਨਮ', anyOrder)).toBe(false);
+  });
+});
+
+describe('matchesLetterSet — must include all consonants', () => {
+  it('requires every rack letter (any other letters allowed)', () => {
+    const all = q({ extra: 'unlimited', requireAllConsonants: true });
+    expect(matchesLetterSet('ਚਸਹਨ', all)).toBe(true); // all three + ਨ
+    expect(matchesLetterSet('ਸਹਨ', all)).toBe(false); // missing ਚ
+  });
+
+  it('combines with "only these letters" to require using each one', () => {
+    const all = q({ extra: 'none', requireAllConsonants: true });
+    expect(matchesLetterSet('ਸਚਹ', all)).toBe(true); // only these, all present
+    expect(matchesLetterSet('ਸਹ', all)).toBe(false); // missing ਚ
+    expect(matchesLetterSet('ਸਚਹਨ', all)).toBe(false); // ਨ is outside the set
+  });
+});
+
+describe('matchesLetterSet — must include all vowels', () => {
+  const base = q({
+    vowelMode: 'only',
+    vowels: { mukta: true, signs: ['ਾ', 'ਿ'] },
+    extra: 'unlimited',
+    requireAllVowels: true,
+  });
+
+  it('requires every selected vowel sign to appear', () => {
+    expect(matchesLetterSet('ਸਾਸਿ', base)).toBe(true); // has ਾ and ਿ
+    expect(matchesLetterSet('ਸਾਸ', base)).toBe(false); // missing ਿ
   });
 });
 

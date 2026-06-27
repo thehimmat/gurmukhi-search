@@ -24,6 +24,10 @@ export type LetterSetQuery = {
   wildcardSlots: number; // blanks allowed when extra === 'limited' (1..3)
   vowelMode: VowelMode;
   vowels: { mukta: boolean; signs: string[] }; // used when vowelMode === 'only'
+  // Require every listed consonant / selected vowel sign to appear in the word
+  // (otherwise any subset of them may appear). Orthogonal to `extra`.
+  requireAllConsonants: boolean;
+  requireAllVowels: boolean; // only applies when vowelMode === 'only'
   // When true (default), nasalization (bindi/tippi) and addak are treated as
   // transparent diacritics — a nasalized/geminated rack letter still counts.
   // When false, any such mark makes a syllable fall outside "only these letters".
@@ -41,6 +45,8 @@ export const DEFAULT_LETTER_SET_QUERY: LetterSetQuery = {
   wildcardSlots: 2,
   vowelMode: 'any',
   vowels: { mukta: true, signs: ['ਾ', 'ਿ', 'ੀ'] },
+  requireAllConsonants: false,
+  requireAllVowels: false,
   allowNasalAddak: true,
   scope: 'word',
 };
@@ -83,6 +89,7 @@ export function matchesLetterSet(word: string, q: LetterSetQuery): boolean {
   let exceptions = 0; // syllables that are not a "clean" rack letter
   let cleanCount = 0;
   const cleanUsage = new Map<string, number>(); // rack letter → clean-use count
+  const cleanVowels = new Set<string>(); // vowel signs present on clean syllables
 
   for (const syl of syllables) {
     const clean =
@@ -92,31 +99,42 @@ export function matchesLetterSet(word: string, q: LetterSetQuery): boolean {
     if (clean) {
       cleanCount++;
       cleanUsage.set(syl.base, (cleanUsage.get(syl.base) ?? 0) + 1);
+      if (syl.vowelSign) cleanVowels.add(syl.vowelSign);
     } else {
       exceptions++;
     }
   }
 
+  // The word must actually use at least one of the chosen letters.
+  if (cleanCount < 1) return false;
+
   // No-repeat constraint (sub-anagram). Only meaningful for none / limited,
   // where the word is otherwise built from the rack.
-  if (!q.repeat && (q.extra === 'none' || q.extra === 'limited')) {
+  if (!q.repeat && q.extra !== 'unlimited') {
     for (const count of cleanUsage.values()) {
       if (count > 1) return false;
     }
   }
 
-  switch (q.extra) {
-    case 'none':
-      return exceptions === 0;
-    case 'limited':
-      return exceptions <= q.wildcardSlots && cleanCount >= 1;
-    case 'unlimited':
-      // Every rack letter must appear at least once as a clean syllable.
-      for (const letter of rack) {
-        if ((cleanUsage.get(letter) ?? 0) < 1) return false;
-      }
-      return true;
+  // Allowed-exception budget — what may appear besides the rack letters.
+  if (q.extra === 'none' && exceptions !== 0) return false;
+  if (q.extra === 'limited' && exceptions > q.wildcardSlots) return false;
+
+  // "Must include all these consonants": every rack letter must appear.
+  if (q.requireAllConsonants) {
+    for (const letter of rack) {
+      if ((cleanUsage.get(letter) ?? 0) < 1) return false;
+    }
   }
+
+  // "Must include all these vowels": every selected matra must appear.
+  if (q.requireAllVowels && q.vowelMode === 'only') {
+    for (const sign of q.vowels.signs) {
+      if (!cleanVowels.has(sign)) return false;
+    }
+  }
+
+  return true;
 }
 
 // A short human-readable summary of the query, shown live in the builder UI.
@@ -137,7 +155,7 @@ export function describeLetterSet(q: LetterSetQuery): string {
       }`;
       break;
     case 'unlimited':
-      body = `containing ${letters} (other letters allowed)`;
+      body = `using ${letters}, other letters allowed`;
       break;
   }
 
@@ -152,5 +170,11 @@ export function describeLetterSet(q: LetterSetQuery): string {
     vowelNote = parts.length ? ` with vowels ${parts.join(' ')}` : '';
   }
 
-  return `${target} ${body}${repeatNote}${vowelNote}.`;
+  const reqCons = q.requireAllConsonants ? `; must include all of ${letters}` : '';
+  const reqVow =
+    q.requireAllVowels && q.vowelMode === 'only' && q.vowels.signs.length
+      ? `; must include vowels ${q.vowels.signs.join(' ')}`
+      : '';
+
+  return `${target} ${body}${repeatNote}${vowelNote}${reqCons}${reqVow}.`;
 }
