@@ -12,6 +12,11 @@ export default function PatternHelp() {
       </summary>
 
       <div className="mt-3 space-y-4">
+        <p className="text-xs text-[#7a6045]">
+          Use the <span className="font-medium">Words / Lines</span> toggle to match the
+          pattern against single words or whole Gurbani lines.
+        </p>
+
         <div>
           <p className="font-medium mb-1">Wildcards</p>
           <table className="text-xs w-full border-collapse">

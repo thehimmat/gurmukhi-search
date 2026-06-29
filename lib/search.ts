@@ -1,16 +1,60 @@
 // Search query builders — each mode returns { results, total }.
 // All queries target the kosh Supabase DB (read-only via anon key).
 
-import { supabase, LineWithMeta, SearchFilters } from './supabase';
+import { supabase, LineWithMeta, SearchFilters, Word } from './supabase';
 import { compilePattern } from './pattern-compiler';
+import {
+  LetterSetQuery,
+  Scope,
+  matchesLetterSet,
+  validateLetterSet,
+} from './letterset';
+import { getWordIndex } from './word-index';
 
 export const PAGE_SIZE = 20;
 
 export type SearchResult = {
   lines: LineWithMeta[];
-  total: number;
+  words?: Word[];
+  total: number | null; // null = unknown (line scope skips an expensive exact count)
+  hasMore?: boolean; // used when total is null, to drive the "Load more" button
   error?: string;
 };
+
+// The regex RPCs return shabad metadata as flat columns; the line components
+// expect it nested under `shabads`. Reshape flat rows into LineWithMeta.
+type FlatLineRow = LineWithMeta & {
+  raag_english: string | null;
+  raag_gurmukhi: string | null;
+  writer_english: string | null;
+  writer_id: number | null;
+  ang_start: number | null;
+  total_count?: number;
+};
+
+function mapFlatLineRow(r: FlatLineRow): LineWithMeta {
+  const hasShabad = r.raag_english || r.raag_gurmukhi || r.writer_english;
+  return {
+    id: r.id,
+    verse_id: r.verse_id,
+    shabad_id: r.shabad_id,
+    ang: r.ang,
+    line_no: r.line_no,
+    gurmukhi: r.gurmukhi,
+    translation_en: r.translation_en,
+    transliteration_en: r.transliteration_en,
+    shabads: hasShabad
+      ? {
+          id: r.shabad_id ?? 0,
+          raag_english: r.raag_english,
+          raag_gurmukhi: r.raag_gurmukhi,
+          writer_english: r.writer_english,
+          writer_id: r.writer_id,
+          ang_start: r.ang_start ?? 0,
+        }
+      : null,
+  };
+}
 
 // Apply shared filters to a Supabase query builder.
 // `q` must already be selecting from `lines` with a `shabads` join.
@@ -98,9 +142,26 @@ async function searchByRegex(
   });
   if (error) return { lines: [], total: 0, error: error.message };
 
-  const rows = (data ?? []) as Array<LineWithMeta & { total_count: number }>;
+  const rows = (data ?? []) as FlatLineRow[];
   const total = rows[0]?.total_count ?? 0;
-  return { lines: rows, total };
+  return { lines: rows.map(mapFlatLineRow), total };
+}
+
+// ─── Word-scope regex (via RPC) ───────────────────────────────────────────────
+// Runs the same compiled regex against individual word forms (words.gurmukhi).
+async function searchWordsByRegex(regex: string, page: number): Promise<SearchResult> {
+  const offset = page * PAGE_SIZE;
+  const { data, error } = await supabase.rpc('search_words_regex', {
+    p_regex: regex,
+    p_limit: PAGE_SIZE,
+    p_offset: offset,
+  });
+  if (error) return { lines: [], total: 0, error: error.message };
+
+  const rows = (data ?? []) as Array<Word & { total_count: number }>;
+  const total = rows[0]?.total_count ?? 0;
+  const words = rows.map((r) => ({ id: r.id, gurmukhi: r.gurmukhi, frequency: r.frequency }));
+  return { lines: [], words, total };
 }
 
 // ─── Mode 2: First-letter search ─────────────────────────────────────────────
@@ -128,9 +189,9 @@ export async function searchFirstLetters(
 
   if (error) return { lines: [], total: 0, error: error.message };
 
-  const rows = (data ?? []) as Array<LineWithMeta & { total_count: number }>;
+  const rows = (data ?? []) as FlatLineRow[];
   const total = rows[0]?.total_count ?? 0;
-  return { lines: rows, total };
+  return { lines: rows.map(mapFlatLineRow), total };
 }
 
 // ─── Mode 3: Pattern search ───────────────────────────────────────────────────
@@ -140,10 +201,65 @@ export async function searchPattern(
   pattern: string,
   filters: SearchFilters = {},
   page = 0,
+  scope: Scope = 'line',
 ): Promise<SearchResult> {
   const compiled = compilePattern(pattern);
   if (!compiled.ok) return { lines: [], total: 0, error: compiled.error };
+  if (scope === 'word') return searchWordsByRegex(compiled.regex, page);
   return searchByRegex(compiled.regex, filters, page);
+}
+
+// ─── Mode 4: Letter Set search ────────────────────────────────────────────────
+// Scrabble/Boggle-style "which words can I build from this set of letters?".
+// Filters the cached word index with the pure matchesLetterSet predicate, then:
+//   word scope → paginate the matching words (already frequency-sorted)
+//   line scope → fetch lines containing any matching word via RPC
+export async function searchLetterSet(
+  query: LetterSetQuery,
+  filters: SearchFilters = {},
+  page = 0,
+): Promise<SearchResult> {
+  const valid = validateLetterSet(query);
+  if (!valid.ok) return { lines: [], total: 0, error: valid.error };
+
+  let index: Word[];
+  try {
+    index = await getWordIndex();
+  } catch (e) {
+    return { lines: [], total: 0, error: (e as Error).message };
+  }
+
+  // index is ordered by frequency desc, so matches keep that order.
+  const matched = index.filter((w) => matchesLetterSet(w.gurmukhi, query));
+
+  if (query.scope === 'word') {
+    const offset = page * PAGE_SIZE;
+    return {
+      lines: [],
+      words: matched.slice(offset, offset + PAGE_SIZE),
+      total: matched.length,
+    };
+  }
+
+  // Line scope: map matching word ids → lines containing them. We fetch one extra
+  // row to learn whether another page exists, rather than computing an exact total
+  // (a distinct-line count over the full corpus blew past the 3s statement timeout).
+  if (matched.length === 0) return { lines: [], total: 0, hasMore: false };
+  const offset = page * PAGE_SIZE;
+  const { data, error } = await supabase.rpc('search_lines_by_word_ids', {
+    p_word_ids: matched.map((w) => w.id),
+    p_raag: filters.raag ?? null,
+    p_writer: filters.writer ?? null,
+    p_ang_min: filters.angMin ?? null,
+    p_ang_max: filters.angMax ?? null,
+    p_limit: PAGE_SIZE + 1,
+    p_offset: offset,
+  });
+  if (error) return { lines: [], total: 0, error: error.message };
+
+  const rows = (data ?? []) as FlatLineRow[];
+  const hasMore = rows.length > PAGE_SIZE;
+  return { lines: rows.slice(0, PAGE_SIZE).map(mapFlatLineRow), total: null, hasMore };
 }
 
 // ─── Metadata helpers ─────────────────────────────────────────────────────────

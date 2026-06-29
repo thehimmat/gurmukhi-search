@@ -8,7 +8,7 @@ type Props = {
   value: string;
   onChange: (v: string) => void;
   onSubmit: () => void;
-  mode: 'contains' | 'first_letter' | 'pattern';
+  mode: 'contains' | 'first_letter' | 'pattern' | 'letterset';
   placeholder?: string;
 };
 
@@ -36,6 +36,7 @@ export default function SearchBar({ value, onChange, onSubmit, mode, placeholder
     contains:     'Type Gurmukhi, or type phonetically — no Gurmukhi keyboard needed',
     first_letter: 'Type first letter of each word — p n k → ਪ ਨ ਕ',
     pattern:      'Use _ (any char), * (any sequence), {nasal}, {bilabial}, etc.',
+    letterset:    'Build a set of letters below',
   };
 
   return (
