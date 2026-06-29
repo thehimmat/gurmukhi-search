@@ -22,7 +22,8 @@ type AppMode = 'gurbani' | 'kosh';
 type SearchState = {
   lines: LineWithMeta[];
   words: Word[];
-  total: number;
+  total: number | null; // null = unknown total (line scope); use hasMore instead
+  hasMore: boolean; // used when total is null
   page: number;
   loading: boolean;
   error: string | null;
@@ -219,6 +220,7 @@ function SearchPage() {
     lines: [],
     words: [],
     total: 0,
+    hasMore: false,
     page: 0,
     loading: false,
     error: null,
@@ -305,6 +307,7 @@ function SearchPage() {
         loading: false,
         error: null,
         total: json.total,
+        hasMore: json.hasMore ?? false,
         page,
         committedQuery: isLetterSet ? 'letterset' : q,
         lines: page === 0 ? (json.lines ?? []) : [...s.lines, ...(json.lines ?? [])],
@@ -349,7 +352,7 @@ function SearchPage() {
   const hasResults = items.length > 0;
   const showed     = items.length;
   const total      = state.total;
-  const hasMore    = showed < total;
+  const hasMore    = total === null ? state.hasMore : showed < total;
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100%' }}>
@@ -407,7 +410,9 @@ function SearchPage() {
             {(hasResults || state.loading) && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', fontSize: '0.875rem', color: 'var(--text-secondary)', fontFamily: '"Inter", sans-serif' }}>
                 {hasResults && (
-                  <span>Showing <strong>{showed}</strong> of <strong>{total.toLocaleString()}</strong> result{total !== 1 ? 's' : ''}</span>
+                  total === null
+                    ? <span>Showing <strong>{showed}</strong> result{showed !== 1 ? 's' : ''}{hasMore ? '+' : ''}</span>
+                    : <span>Showing <strong>{showed}</strong> of <strong>{total.toLocaleString()}</strong> result{total !== 1 ? 's' : ''}</span>
                 )}
                 {state.loading && <span style={{ color: 'var(--accent)' }} className="animate-pulse">Searching…</span>}
               </div>
@@ -451,6 +456,8 @@ function SearchPage() {
                 >
                   {state.loading ? (
                     'Loading…'
+                  ) : total === null ? (
+                    'Load more'
                   ) : (
                     <>
                       Load {Math.min(PAGE_SIZE, total - showed)} more

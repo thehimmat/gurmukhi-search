@@ -71,6 +71,7 @@ export async function GET(req: NextRequest) {
     lines: result.lines,
     words: result.words ?? null,
     total: result.total,
+    hasMore: result.hasMore ?? null,
     page,
     pageSize: PAGE_SIZE,
   });

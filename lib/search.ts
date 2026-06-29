@@ -16,7 +16,8 @@ export const PAGE_SIZE = 20;
 export type SearchResult = {
   lines: LineWithMeta[];
   words?: Word[];
-  total: number;
+  total: number | null; // null = unknown (line scope skips an expensive exact count)
+  hasMore?: boolean; // used when total is null, to drive the "Load more" button
   error?: string;
 };
 
@@ -240,8 +241,10 @@ export async function searchLetterSet(
     };
   }
 
-  // Line scope: map matching word ids → lines containing them.
-  if (matched.length === 0) return { lines: [], total: 0 };
+  // Line scope: map matching word ids → lines containing them. We fetch one extra
+  // row to learn whether another page exists, rather than computing an exact total
+  // (a distinct-line count over the full corpus blew past the 3s statement timeout).
+  if (matched.length === 0) return { lines: [], total: 0, hasMore: false };
   const offset = page * PAGE_SIZE;
   const { data, error } = await supabase.rpc('search_lines_by_word_ids', {
     p_word_ids: matched.map((w) => w.id),
@@ -249,14 +252,14 @@ export async function searchLetterSet(
     p_writer: filters.writer ?? null,
     p_ang_min: filters.angMin ?? null,
     p_ang_max: filters.angMax ?? null,
-    p_limit: PAGE_SIZE,
+    p_limit: PAGE_SIZE + 1,
     p_offset: offset,
   });
   if (error) return { lines: [], total: 0, error: error.message };
 
   const rows = (data ?? []) as FlatLineRow[];
-  const total = rows[0]?.total_count ?? 0;
-  return { lines: rows.map(mapFlatLineRow), total };
+  const hasMore = rows.length > PAGE_SIZE;
+  return { lines: rows.slice(0, PAGE_SIZE).map(mapFlatLineRow), total: null, hasMore };
 }
 
 // ─── Metadata helpers ─────────────────────────────────────────────────────────
