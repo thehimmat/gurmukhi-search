@@ -4,30 +4,16 @@
 
 import { supabase, Word } from './supabase';
 
-const CHUNK = 1000; // Supabase caps a single select at 1000 rows
-
 let cache: Word[] | null = null;
 let loading: Promise<Word[]> | null = null;
 
 async function fetchAllWords(): Promise<Word[]> {
-  const all: Word[] = [];
-  let from = 0;
-  for (;;) {
-    const { data, error } = await supabase
-      .from('words')
-      .select('id, gurmukhi, frequency')
-      // Secondary sort by id gives a *stable* total order so ranged pagination
-      // never duplicates or skips rows that share a frequency.
-      .order('frequency', { ascending: false })
-      .order('id', { ascending: true })
-      .range(from, from + CHUNK - 1);
-    if (error) throw new Error(error.message);
-    const rows = (data ?? []) as Word[];
-    all.push(...rows);
-    if (rows.length < CHUNK) break;
-    from += CHUNK;
-  }
-  return all;
+  // Single round-trip: words_index() returns the whole list as one jsonb array,
+  // pre-sorted by frequency. (A table select is capped at 1000 rows, which would
+  // mean ~30 sequential requests — the main cost of a cold first search.)
+  const { data, error } = await supabase.rpc('words_index');
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Word[];
 }
 
 // Returns the cached word index, loading it on first use. Concurrent callers
