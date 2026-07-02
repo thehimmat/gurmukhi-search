@@ -4,10 +4,11 @@ import {
   searchFirstLetters,
   searchPattern,
   searchLetterSet,
+  WordViewOptions,
   PAGE_SIZE,
 } from '@/lib/search';
 import { SearchFilters } from '@/lib/supabase';
-import { LetterSetQuery, ExtraMode, Scope, VowelMode } from '@/lib/letterset';
+import { LetterSetQuery, ExtraMode, Scope, VowelMode, WordSort, FilterMode } from '@/lib/letterset';
 
 export const runtime = 'nodejs';
 
@@ -49,9 +50,15 @@ export async function GET(req: NextRequest) {
     angMax: sp.has('ang_max') ? parseInt(sp.get('ang_max')!, 10) : undefined,
   };
 
+  const view: WordViewOptions = {
+    sort: (sp.get('sort') as WordSort) ?? undefined,
+    filter: sp.get('filter') ?? undefined,
+    filterMode: (sp.get('fmode') as FilterMode) ?? undefined,
+  };
+
   let result;
   if (mode === 'letterset') {
-    result = await searchLetterSet(parseLetterSet(sp), filters, page);
+    result = await searchLetterSet(parseLetterSet(sp), filters, page, view);
   } else if (mode === 'first_letter') {
     result = await searchFirstLetters(query, filters, page);
   } else if (mode === 'pattern') {

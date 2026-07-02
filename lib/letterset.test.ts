@@ -4,6 +4,9 @@ import {
   validateLetterSet,
   describeLetterSet,
   DEFAULT_LETTER_SET_QUERY,
+  syllableCount,
+  filterWords,
+  sortWords,
   type LetterSetQuery,
 } from './letterset';
 import { parseSyllables } from './gurmukhi-chars';
@@ -221,5 +224,51 @@ describe('describeLetterSet', () => {
     expect(validateLetterSet({ ...DEFAULT_LETTER_SET_QUERY, letters: ['ਸ'] })).toEqual({
       ok: true,
     });
+  });
+});
+
+describe('syllableCount', () => {
+  it('counts akhar, not raw codepoints', () => {
+    expect(syllableCount('ਹੀ')).toBe(1); // ਹ + bihari
+    expect(syllableCount('ਸਚ')).toBe(2); // ਸ ਚ
+    expect(syllableCount('ਸਚਿਆਰਾ')).toBe(4); // ਸ ਚਿ ਆ ਰਾ
+  });
+});
+
+describe('filterWords', () => {
+  const ws = [
+    { gurmukhi: 'ਸਚੁ', frequency: 5 },
+    { gurmukhi: 'ਹਸ', frequency: 3 },
+    { gurmukhi: 'ਚਸਹ', frequency: 1 },
+  ];
+  it('prefix matches from the start only', () => {
+    expect(filterWords(ws, 'ਸ', 'prefix').map((w) => w.gurmukhi)).toEqual(['ਸਚੁ']);
+  });
+  it('substring matches anywhere', () => {
+    expect(filterWords(ws, 'ਸ', 'substring').map((w) => w.gurmukhi)).toEqual(['ਸਚੁ', 'ਹਸ', 'ਚਸਹ']);
+  });
+  it('blank filter returns everything', () => {
+    expect(filterWords(ws, '   ', 'prefix')).toHaveLength(3);
+  });
+});
+
+describe('sortWords', () => {
+  const ws = [
+    { gurmukhi: 'ਸ', frequency: 10 }, // 1 syllable
+    { gurmukhi: 'ਸਚਿਆਰਾ', frequency: 2 }, // 4 syllables
+    { gurmukhi: 'ਸਚ', frequency: 50 }, // 2 syllables
+  ];
+  it('sorts by frequency both ways', () => {
+    expect(sortWords(ws, 'freq_desc').map((w) => w.frequency)).toEqual([50, 10, 2]);
+    expect(sortWords(ws, 'freq_asc').map((w) => w.frequency)).toEqual([2, 10, 50]);
+  });
+  it('sorts by syllable length both ways', () => {
+    expect(sortWords(ws, 'len_desc').map((w) => w.gurmukhi)).toEqual(['ਸਚਿਆਰਾ', 'ਸਚ', 'ਸ']);
+    expect(sortWords(ws, 'len_asc').map((w) => w.gurmukhi)).toEqual(['ਸ', 'ਸਚ', 'ਸਚਿਆਰਾ']);
+  });
+  it('does not mutate the input array', () => {
+    const copy = [...ws];
+    sortWords(ws, 'freq_asc');
+    expect(ws).toEqual(copy);
   });
 });
