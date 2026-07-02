@@ -12,9 +12,10 @@ import PatternHelp from '@/components/PatternHelp';
 import ScopeToggle from '@/components/ScopeToggle';
 import LetterSetBuilder from '@/components/LetterSetBuilder';
 import WordList from '@/components/WordList';
+import WordResultControls from '@/components/WordResultControls';
 import { SearchFilters, LineWithMeta, Word } from '@/lib/supabase';
 import { PAGE_SIZE } from '@/lib/search';
-import { DEFAULT_LETTER_SET_QUERY, LetterSetQuery, Scope } from '@/lib/letterset';
+import { DEFAULT_LETTER_SET_QUERY, LetterSetQuery, Scope, WordSort, FilterMode } from '@/lib/letterset';
 
 type SearchMode = 'contains' | 'first_letter' | 'pattern' | 'letterset';
 type AppMode = 'gurbani' | 'kosh';
@@ -213,6 +214,10 @@ function SearchPage() {
   const [searchMode, setSearchMode] = useState<SearchMode>('contains');
   const [patternScope, setPatternScope] = useState<Scope>('line');
   const [letterSet, setLetterSet] = useState<LetterSetQuery>(DEFAULT_LETTER_SET_QUERY);
+  // Word-scope result view options (Letter Set): ordering + in-result filter.
+  const [wordSort, setWordSort] = useState<WordSort>('freq_desc');
+  const [wordFilter, setWordFilter] = useState('');
+  const [wordFilterMode, setWordFilterMode] = useState<FilterMode>('prefix');
   const [filters, setFilters] = useState<SearchFilters>({});
   const [raags, setRaags] = useState<string[]>([]);
   const [writers, setWriters] = useState<string[]>([]);
@@ -233,6 +238,12 @@ function SearchPage() {
   patternScopeRef.current = patternScope;
   const letterSetRef = useRef(letterSet);
   letterSetRef.current = letterSet;
+  const wordSortRef = useRef(wordSort);
+  wordSortRef.current = wordSort;
+  const wordFilterRef = useRef(wordFilter);
+  wordFilterRef.current = wordFilter;
+  const wordFilterModeRef = useRef(wordFilterMode);
+  wordFilterModeRef.current = wordFilterMode;
 
   useEffect(() => {
     fetch('/api/meta')
@@ -289,6 +300,10 @@ function SearchPage() {
       params.set('reqcons', ls.requireAllConsonants ? '1' : '0');
       params.set('reqvowels', ls.requireAllVowels ? '1' : '0');
       params.set('nasal', ls.allowNasalAddak ? '1' : '0');
+      // Word-scope result view (ignored server-side for line scope)
+      params.set('sort', wordSortRef.current);
+      if (wordFilterRef.current.trim()) params.set('filter', wordFilterRef.current.trim());
+      params.set('fmode', wordFilterModeRef.current);
     } else {
       params.set('q', q);
       if (m === 'pattern') params.set('scope', patternScopeRef.current);
@@ -342,6 +357,22 @@ function SearchPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patternScope]);
+
+  // Sort / filter-mode changes re-run the letter-set word search immediately.
+  useEffect(() => {
+    if (state.committedQuery && searchMode === 'letterset' && letterSet.scope === 'word') {
+      runSearch('letterset', 'letterset', filtersRef.current, 0);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wordSort, wordFilterMode]);
+
+  // Filter text changes re-run it too, debounced while typing.
+  useEffect(() => {
+    if (!(state.committedQuery && searchMode === 'letterset' && letterSet.scope === 'word')) return;
+    const t = setTimeout(() => runSearch('letterset', 'letterset', filtersRef.current, 0), 300);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wordFilter]);
 
   const displayScope: Scope =
     searchMode === 'letterset' ? letterSet.scope
@@ -422,6 +453,17 @@ function SearchPage() {
               <div style={{ marginBottom: '1rem', padding: '0.75rem 1rem', borderRadius: '6px', background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontSize: '0.875rem', fontFamily: '"Inter", sans-serif' }}>
                 {state.error}
               </div>
+            )}
+
+            {searchMode === 'letterset' && showingWords && state.committedQuery && (
+              <WordResultControls
+                sort={wordSort}
+                onSortChange={setWordSort}
+                filter={wordFilter}
+                onFilterChange={setWordFilter}
+                filterMode={wordFilterMode}
+                onFilterModeChange={setWordFilterMode}
+              />
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>

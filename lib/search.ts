@@ -6,10 +6,21 @@ import { compilePattern } from './pattern-compiler';
 import {
   LetterSetQuery,
   Scope,
+  WordSort,
+  FilterMode,
   matchesLetterSet,
   validateLetterSet,
+  sortWords,
+  filterWords,
 } from './letterset';
 import { getWordIndex } from './word-index';
+
+// View options for word-scope Letter Set results (ordering + in-result filter).
+export type WordViewOptions = {
+  sort?: WordSort;
+  filter?: string;
+  filterMode?: FilterMode;
+};
 
 export const PAGE_SIZE = 20;
 
@@ -218,6 +229,7 @@ export async function searchLetterSet(
   query: LetterSetQuery,
   filters: SearchFilters = {},
   page = 0,
+  view: WordViewOptions = {},
 ): Promise<SearchResult> {
   const valid = validateLetterSet(query);
   if (!valid.ok) return { lines: [], total: 0, error: valid.error };
@@ -233,11 +245,15 @@ export async function searchLetterSet(
   const matched = index.filter((w) => matchesLetterSet(w.gurmukhi, query));
 
   if (query.scope === 'word') {
+    // Apply the in-result text filter and ordering over the *full* match set,
+    // then paginate — so both work even with far more results than one page.
+    const filtered = filterWords(matched, view.filter ?? '', view.filterMode ?? 'prefix');
+    const ordered = sortWords(filtered, view.sort ?? 'freq_desc');
     const offset = page * PAGE_SIZE;
     return {
       lines: [],
-      words: matched.slice(offset, offset + PAGE_SIZE),
-      total: matched.length,
+      words: ordered.slice(offset, offset + PAGE_SIZE),
+      total: ordered.length,
     };
   }
 

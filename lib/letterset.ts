@@ -178,3 +178,42 @@ export function describeLetterSet(q: LetterSetQuery): string {
 
   return `${target} ${body}${repeatNote}${vowelNote}${reqCons}${reqVow}.`;
 }
+
+// ─── Result ordering & filtering (word-scope results) ─────────────────────────
+// Applied server-side over the full matched set before pagination, so they work
+// even when there are far more results than one page.
+
+export type WordSort = 'freq_desc' | 'freq_asc' | 'len_desc' | 'len_asc';
+export type FilterMode = 'prefix' | 'substring';
+
+type WordLike = { gurmukhi: string; frequency: number };
+
+// Length measured in akhar (base char + its matras), not raw codepoints.
+export function syllableCount(word: string): number {
+  return parseSyllables(word).length;
+}
+
+// Keep only results whose text matches the (Gurmukhi) filter, from the start of
+// the word (prefix) or anywhere within it (substring). Empty filter = no-op.
+export function filterWords<T extends WordLike>(words: T[], filter: string, mode: FilterMode): T[] {
+  const f = filter.trim();
+  if (!f) return words;
+  return mode === 'substring'
+    ? words.filter((w) => w.gurmukhi.includes(f))
+    : words.filter((w) => w.gurmukhi.startsWith(f));
+}
+
+export function sortWords<T extends WordLike>(words: T[], sort: WordSort): T[] {
+  if (sort === 'freq_desc')
+    return [...words].sort((a, b) => b.frequency - a.frequency || a.gurmukhi.localeCompare(b.gurmukhi));
+  if (sort === 'freq_asc')
+    return [...words].sort((a, b) => a.frequency - b.frequency || a.gurmukhi.localeCompare(b.gurmukhi));
+  // Length sorts: precompute syllable counts once, tie-break by frequency desc.
+  const withLen = words.map((w) => ({ w, len: syllableCount(w.gurmukhi) }));
+  withLen.sort((a, b) =>
+    sort === 'len_desc'
+      ? b.len - a.len || b.w.frequency - a.w.frequency
+      : a.len - b.len || b.w.frequency - a.w.frequency,
+  );
+  return withLen.map((x) => x.w);
+}
