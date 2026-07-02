@@ -39,7 +39,11 @@ export default function LetterSetBuilder({ query, onChange, onSubmit }: Props) {
 
   const valid = validateLetterSet(query);
 
-  function commitDraft() {
+  // Commit typed letters into chips. Only refocus when committing via Enter/space
+  // (an active typing session, where the input is already focused so focus() is a
+  // no-op). NEVER refocus on blur — that would yank focus back to this top-of-page
+  // input on every outside click, scrolling the page to the top.
+  function commitDraft(refocus = false) {
     const bases = [...draft].filter(isBaseChar);
     if (bases.length) {
       const next = [...query.letters];
@@ -47,13 +51,13 @@ export default function LetterSetBuilder({ query, onChange, onSubmit }: Props) {
       onChange({ ...query, letters: next });
     }
     setDraft('');
-    inputRef.current?.focus();
+    if (refocus) inputRef.current?.focus();
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      commitDraft();
+      commitDraft(true);
       return;
     }
     onKeyDown(e);
@@ -99,7 +103,7 @@ export default function LetterSetBuilder({ query, onChange, onSubmit }: Props) {
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={handleKeyDown}
             onPaste={onPaste}
-            onBlur={commitDraft}
+            onBlur={() => commitDraft()}
             placeholder={query.letters.length ? 'add…' : 'type letters, e.g. ਚ ਸ ਹ'}
             className="min-w-[8rem] flex-1 rounded-md border border-[#c8b89a] bg-white px-3 py-1.5 text-lg
                        focus:outline-none focus:ring-2 focus:ring-[#8b5e3c]
