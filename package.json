@@ -9,7 +9,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@atthebunga/gurmukhi-input": "^1.1.1",
+    "@atthebunga/gurmukhi-input": "^1.3.0",
     "@supabase/supabase-js": "^2.106.2",
     "next": "16.2.6",
     "react": "19.2.4",
