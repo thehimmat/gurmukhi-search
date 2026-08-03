@@ -16,6 +16,10 @@ const nextConfig: NextConfig = {
       "/browse",
       "/ang/:path*",
       "/about",
+      // /about subpages (e.g. /about/mahan-kosh-key, the ਸੰਕੇਤ reference)
+      // are kosh-zone pages too; ":path*" does not match the bare /about,
+      // so both entries are needed.
+      "/about/:path*",
       "/health",
       "/admin/:path*",
       "/api/word/:path*",
