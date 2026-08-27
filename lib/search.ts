@@ -123,6 +123,11 @@ export async function searchContains(
     .from('lines')
     .select('*, shabads(raag_english, raag_gurmukhi, writer_english, writer_id, ang_start)')
     .ilike('gurmukhi', `%${searchText}%`)
+    // Corpus first (SGGS, then Dasam Bani, then Bhai Gurdas Ji Vaaran), then
+    // reading order within it: (ang, line_no) alone interleaves the corpora.
+    // The rank is lines.corpus_rank (kosh migration 031); migration 005 here
+    // applies the same sort inside the search RPCs.
+    .order('corpus_rank', { ascending: true })
     .order('ang', { ascending: true })
     .order('line_no', { ascending: true })
     .range(offset, offset + PAGE_SIZE - 1);
