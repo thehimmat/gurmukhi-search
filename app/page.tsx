@@ -13,7 +13,14 @@ import ScopeToggle from '@/components/ScopeToggle';
 import LetterSetBuilder from '@/components/LetterSetBuilder';
 import WordList from '@/components/WordList';
 import WordResultControls from '@/components/WordResultControls';
-import { SearchFilters, LineWithMeta, Word } from '@/lib/supabase';
+import {
+  SearchFilters,
+  LineWithMeta,
+  Word,
+  RaagFacet,
+  WriterFacet,
+  CorpusFacet,
+} from '@/lib/supabase';
 import { PAGE_SIZE } from '@/lib/search';
 import { DEFAULT_LETTER_SET_QUERY, LetterSetQuery, Scope, WordSort, FilterMode } from '@/lib/letterset';
 
@@ -219,8 +226,9 @@ function SearchPage() {
   const [wordFilter, setWordFilter] = useState('');
   const [wordFilterMode, setWordFilterMode] = useState<FilterMode>('prefix');
   const [filters, setFilters] = useState<SearchFilters>({});
-  const [raags, setRaags] = useState<string[]>([]);
-  const [writers, setWriters] = useState<string[]>([]);
+  const [raags, setRaags] = useState<RaagFacet[]>([]);
+  const [writers, setWriters] = useState<WriterFacet[]>([]);
+  const [corpora, setCorpora] = useState<CorpusFacet[]>([]);
   const [state, setState] = useState<SearchState>({
     lines: [],
     words: [],
@@ -248,9 +256,12 @@ function SearchPage() {
   useEffect(() => {
     fetch('/api/meta')
       .then(r => r.json())
-      .then(({ raags, writers }: { raags: string[]; writers: string[] }) => {
-        setRaags(raags);
-        setWriters(writers);
+      .then(({ raags, writers, corpora }: {
+        raags: RaagFacet[]; writers: WriterFacet[]; corpora: CorpusFacet[];
+      }) => {
+        setRaags(raags ?? []);
+        setWriters(writers ?? []);
+        setCorpora(corpora ?? []);
       })
       .catch(() => {});
   }, []);
@@ -282,8 +293,10 @@ function SearchPage() {
     }));
 
     const params = new URLSearchParams({ mode: m, page: String(page) });
-    if (f.raag) params.set('raag', f.raag);
-    if (f.writer) params.set('writer', f.writer);
+    // Multi-select facets repeat their param once per selected value.
+    f.raags?.forEach((r) => params.append('raag', r));
+    f.writers?.forEach((w) => params.append('writer', w));
+    f.sources?.forEach((id) => params.append('source', String(id)));
     if (f.angMin != null) params.set('ang_min', String(f.angMin));
     if (f.angMax != null) params.set('ang_max', String(f.angMax));
 
@@ -433,7 +446,13 @@ function SearchPage() {
 
           {!showingWords && (
             <div style={{ maxWidth: '860px', margin: '0 auto', padding: '0.5rem 1.5rem' }}>
-              <FilterPanel filters={filters} onChange={setFilters} raags={raags} writers={writers} />
+              <FilterPanel
+                filters={filters}
+                onChange={setFilters}
+                raags={raags}
+                writers={writers}
+                corpora={corpora}
+              />
             </div>
           )}
 
