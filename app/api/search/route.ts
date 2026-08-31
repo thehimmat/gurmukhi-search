@@ -43,9 +43,18 @@ export async function GET(req: NextRequest) {
   const page = Math.max(0, parseInt(sp.get('page') ?? '0', 10));
   const scope: Scope = sp.get('scope') === 'word' ? 'word' : 'line';
 
+  // Multi-select facets arrive as repeated params (raag=a&raag=b). A single
+  // value still works, so existing links keep resolving.
+  const list = (key: string) =>
+    sp.getAll(key).flatMap((v) => v.split(',')).map((v) => v.trim()).filter(Boolean);
+  const writers = list('writer');
+  const raags = list('raag');
+  const sources = list('source').map((v) => parseInt(v, 10)).filter((n) => !Number.isNaN(n));
+
   const filters: SearchFilters = {
-    raag: sp.get('raag') ?? undefined,
-    writer: sp.get('writer') ?? undefined,
+    raags: raags.length ? raags : undefined,
+    writers: writers.length ? writers : undefined,
+    sources: sources.length ? sources : undefined,
     angMin: sp.has('ang_min') ? parseInt(sp.get('ang_min')!, 10) : undefined,
     angMax: sp.has('ang_max') ? parseInt(sp.get('ang_max')!, 10) : undefined,
   };

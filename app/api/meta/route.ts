@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
-import { listRaags, listWriters } from '@/lib/search';
+import { listRaags, listWriters, listCorpora } from '@/lib/search';
 
 export const runtime = 'nodejs';
 
-// Returns the list of available raags and writers for the filter dropdowns.
-// Cached for 1 hour — these don't change unless the kosh DB is re-ingested.
+// Options for the filter dropdowns: raags, writers and scriptures, each with a
+// line count. Cached for 1 hour — they don't change unless kosh is re-ingested.
 export async function GET() {
-  const [raags, writers] = await Promise.all([listRaags(), listWriters()]);
-  return NextResponse.json({ raags, writers }, {
+  const [raags, writers, corpora] = await Promise.all([listRaags(), listWriters(), listCorpora()]);
+  return NextResponse.json({ raags, writers, corpora }, {
     headers: { 'Cache-Control': 'public, max-age=3600' },
   });
 }
