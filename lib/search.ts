@@ -317,13 +317,15 @@ export async function searchLetterSet(
 // ever showed the writers and raags that fell in that first slice.
 
 export async function listRaags(): Promise<RaagFacet[]> {
-  const { data } = await supabase.rpc('list_raags');
+  const { data, error } = await supabase.rpc('list_raags');
+  if (error) throw new Error(`list_raags: ${error.message}`);
   return ((data ?? []) as Array<{ raag_english: string; line_count: number }>)
     .map((r) => ({ name: r.raag_english, lineCount: Number(r.line_count) }));
 }
 
 export async function listWriters(): Promise<WriterFacet[]> {
-  const { data } = await supabase.rpc('list_writers');
+  const { data, error } = await supabase.rpc('list_writers');
+  if (error) throw new Error(`list_writers: ${error.message}`);
   return ((data ?? []) as Array<{ writer_english: string; line_count: number; source_ids: number[] }>)
     .map((r) => ({
       name: r.writer_english,
@@ -334,7 +336,8 @@ export async function listWriters(): Promise<WriterFacet[]> {
 
 // Scriptures, in reading order (SGGS, Dasam Bani, Bhai Gurdas Ji Vaaran).
 export async function listCorpora(): Promise<CorpusFacet[]> {
-  const { data } = await supabase.rpc('list_corpora');
+  const { data, error } = await supabase.rpc('list_corpora');
+  if (error) throw new Error(`list_corpora: ${error.message}`);
   return ((data ?? []) as Array<{ id: number; code: string; name: string; line_count: number }>)
     .map((r) => ({ id: Number(r.id), code: r.code, name: r.name, lineCount: Number(r.line_count) }));
 }
