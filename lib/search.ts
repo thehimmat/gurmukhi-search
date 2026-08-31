@@ -1,7 +1,15 @@
 // Search query builders — each mode returns { results, total }.
 // All queries target the kosh Supabase DB (read-only via anon key).
 
-import { supabase, LineWithMeta, SearchFilters, Word } from './supabase';
+import {
+  supabase,
+  LineWithMeta,
+  SearchFilters,
+  Word,
+  WriterFacet,
+  RaagFacet,
+  CorpusFacet,
+} from './supabase';
 import { compilePattern } from './pattern-compiler';
 import {
   LetterSetQuery,
@@ -76,11 +84,39 @@ function applyFilters<T>(
 ): any {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = q as any;
-  if (filters.raag)    query = query.eq('shabads.raag_english', filters.raag);
-  if (filters.writer)  query = query.eq('shabads.writer_english', filters.writer);
+  // Multi-select facets: several values mean "any of these", so `in` not `eq`.
+  if (filters.raags?.length)   query = query.in('shabads.raag_english', filters.raags);
+  if (filters.writers?.length) query = query.in('shabads.writer_english', filters.writers);
+  if (filters.sources?.length) query = query.in('source_fk', filters.sources);
   if (filters.angMin != null) query = query.gte('ang', filters.angMin);
   if (filters.angMax != null) query = query.lte('ang', filters.angMax);
   return query;
+}
+
+// A raag or writer filter must exclude lines whose shabad does not match, so the
+// embed has to be an inner join; without such a filter it stays a left join,
+// which keeps lines that carry no shabad metadata at all. The two selects are
+// spelled out as literals because supabase-js types the response off the string.
+function needsShabadJoin(filters: SearchFilters): boolean {
+  return !!(filters.raags?.length || filters.writers?.length);
+}
+
+const COUNT_SELECT = 'id, shabads(raag_english, writer_english)';
+const COUNT_SELECT_INNER = 'id, shabads!inner(raag_english, writer_english)';
+const LINE_SELECT =
+  '*, shabads(raag_english, raag_gurmukhi, writer_english, writer_id, ang_start)';
+const LINE_SELECT_INNER =
+  '*, shabads!inner(raag_english, raag_gurmukhi, writer_english, writer_id, ang_start)';
+
+// The line-search RPCs take the same facets as arrays; null means unfiltered.
+function rpcFilterArgs(filters: SearchFilters) {
+  return {
+    p_raags: filters.raags?.length ? filters.raags : null,
+    p_writers: filters.writers?.length ? filters.writers : null,
+    p_sources: filters.sources?.length ? filters.sources : null,
+    p_ang_min: filters.angMin ?? null,
+    p_ang_max: filters.angMax ?? null,
+  };
 }
 
 // ─── Mode 1: Contains ─────────────────────────────────────────────────────────
@@ -96,7 +132,7 @@ export async function searchContains(
   // Count query
   let countQ = supabase
     .from('lines')
-    .select('id, shabads!inner(raag_english, writer_english)', { count: 'exact', head: true });
+    .select(needsShabadJoin(filters) ? COUNT_SELECT_INNER : COUNT_SELECT, { count: 'exact', head: true });
 
   countQ = applyFilters(countQ, filters);
   if (asRegex) {
@@ -113,7 +149,7 @@ export async function searchContains(
 
   countQ = supabase
     .from('lines')
-    .select('id, shabads!inner(raag_english, writer_english)', { count: 'exact', head: true })
+    .select(needsShabadJoin(filters) ? COUNT_SELECT_INNER : COUNT_SELECT, { count: 'exact', head: true })
     .ilike('gurmukhi', `%${searchText}%`);
   countQ = applyFilters(countQ, filters);
   const { count, error: countErr } = await countQ;
@@ -121,8 +157,13 @@ export async function searchContains(
 
   let dataQ = supabase
     .from('lines')
-    .select('*, shabads(raag_english, raag_gurmukhi, writer_english, writer_id, ang_start)')
+    .select(needsShabadJoin(filters) ? LINE_SELECT_INNER : LINE_SELECT)
     .ilike('gurmukhi', `%${searchText}%`)
+    // Corpus first (SGGS, then Dasam Bani, then Bhai Gurdas Ji Vaaran), then
+    // reading order within it: (ang, line_no) alone interleaves the corpora.
+    // The rank is lines.corpus_rank (kosh migration 031); migration 005 here
+    // applies the same sort inside the search RPCs.
+    .order('corpus_rank', { ascending: true })
     .order('ang', { ascending: true })
     .order('line_no', { ascending: true })
     .range(offset, offset + PAGE_SIZE - 1);
@@ -144,10 +185,7 @@ async function searchByRegex(
   const offset = page * PAGE_SIZE;
   const { data, error } = await supabase.rpc('search_lines_regex', {
     p_regex: regex,
-    p_raag: filters.raag ?? null,
-    p_writer: filters.writer ?? null,
-    p_ang_min: filters.angMin ?? null,
-    p_ang_max: filters.angMax ?? null,
+    ...rpcFilterArgs(filters),
     p_limit: PAGE_SIZE,
     p_offset: offset,
   });
@@ -190,10 +228,7 @@ export async function searchFirstLetters(
 
   const { data, error } = await supabase.rpc('search_first_letters', {
     p_letters: gurmukhi_letters,
-    p_raag: filters.raag ?? null,
-    p_writer: filters.writer ?? null,
-    p_ang_min: filters.angMin ?? null,
-    p_ang_max: filters.angMax ?? null,
+    ...rpcFilterArgs(filters),
     p_limit: PAGE_SIZE,
     p_offset: offset,
   });
@@ -264,10 +299,7 @@ export async function searchLetterSet(
   const offset = page * PAGE_SIZE;
   const { data, error } = await supabase.rpc('search_lines_by_word_ids', {
     p_word_ids: matched.map((w) => w.id),
-    p_raag: filters.raag ?? null,
-    p_writer: filters.writer ?? null,
-    p_ang_min: filters.angMin ?? null,
-    p_ang_max: filters.angMax ?? null,
+    ...rpcFilterArgs(filters),
     p_limit: PAGE_SIZE + 1,
     p_offset: offset,
   });
@@ -280,36 +312,29 @@ export async function searchLetterSet(
 
 // ─── Metadata helpers ─────────────────────────────────────────────────────────
 
-export async function listRaags(): Promise<string[]> {
-  const { data } = await supabase
-    .from('shabads')
-    .select('raag_english')
-    .not('raag_english', 'is', null)
-    .order('raag_english');
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const row of data ?? []) {
-    if (row.raag_english && !seen.has(row.raag_english)) {
-      seen.add(row.raag_english);
-      out.push(row.raag_english);
-    }
-  }
-  return out;
+// Each facet list comes from a SQL DISTINCT (migration 006). Reading `shabads`
+// through PostgREST instead silently capped at 1000 rows, so the dropdowns only
+// ever showed the writers and raags that fell in that first slice.
+
+export async function listRaags(): Promise<RaagFacet[]> {
+  const { data } = await supabase.rpc('list_raags');
+  return ((data ?? []) as Array<{ raag_english: string; line_count: number }>)
+    .map((r) => ({ name: r.raag_english, lineCount: Number(r.line_count) }));
 }
 
-export async function listWriters(): Promise<string[]> {
-  const { data } = await supabase
-    .from('shabads')
-    .select('writer_english')
-    .not('writer_english', 'is', null)
-    .order('writer_english');
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const row of data ?? []) {
-    if (row.writer_english && !seen.has(row.writer_english)) {
-      seen.add(row.writer_english);
-      out.push(row.writer_english);
-    }
-  }
-  return out;
+export async function listWriters(): Promise<WriterFacet[]> {
+  const { data } = await supabase.rpc('list_writers');
+  return ((data ?? []) as Array<{ writer_english: string; line_count: number; source_ids: number[] }>)
+    .map((r) => ({
+      name: r.writer_english,
+      lineCount: Number(r.line_count),
+      sourceIds: (r.source_ids ?? []).map(Number),
+    }));
+}
+
+// Scriptures, in reading order (SGGS, Dasam Bani, Bhai Gurdas Ji Vaaran).
+export async function listCorpora(): Promise<CorpusFacet[]> {
+  const { data } = await supabase.rpc('list_corpora');
+  return ((data ?? []) as Array<{ id: number; code: string; name: string; line_count: number }>)
+    .map((r) => ({ id: Number(r.id), code: r.code, name: r.name, lineCount: Number(r.line_count) }));
 }

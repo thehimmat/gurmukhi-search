@@ -45,12 +45,30 @@ export type LineWithMeta = Line & {
   shabads: Shabad | null;
 };
 
+// Raag, writer and scripture are multi-select: an absent or empty array means
+// "no filter on this facet", several values mean "any of these".
 export type SearchFilters = {
-  raag?: string;
-  writer?: string;
+  raags?: string[];
+  writers?: string[];
+  sources?: number[]; // sources.id — which scripture
   angMin?: number;
   angMax?: number;
 };
+
+export function activeFilterCount(f: SearchFilters): number {
+  return (
+    (f.raags?.length ? 1 : 0) +
+    (f.writers?.length ? 1 : 0) +
+    (f.sources?.length ? 1 : 0) +
+    (f.angMin != null ? 1 : 0) +
+    (f.angMax != null ? 1 : 0)
+  );
+}
+
+// Options offered by the filter dropdowns, each with how many lines it covers.
+export type WriterFacet = { name: string; lineCount: number; sourceIds: number[] };
+export type RaagFacet = { name: string; lineCount: number };
+export type CorpusFacet = { id: number; code: string; name: string; lineCount: number };
 
 // ─── Kosh / dictionary types ──────────────────────────────────────────────────
 
