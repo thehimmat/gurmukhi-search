@@ -7,6 +7,7 @@ import { useGurmukhiInput } from '@atthebunga/gurmukhi-input';
 import { useKeyboardLayout, KeyboardLayoutSwitch } from '@/components/KeyboardLayoutSwitch';
 import ModeSelector from '@/components/ModeSelector';
 import FilterPanel from '@/components/FilterPanel';
+import { isNumericQuery } from '@/lib/numbers';
 import ResultCard from '@/components/ResultCard';
 import PatternHelp from '@/components/PatternHelp';
 import ScopeToggle from '@/components/ScopeToggle';
@@ -20,6 +21,7 @@ import {
   RaagFacet,
   WriterFacet,
   CorpusFacet,
+  NumberRoleFacet,
 } from '@/lib/supabase';
 import { PAGE_SIZE } from '@/lib/search';
 import { DEFAULT_LETTER_SET_QUERY, LetterSetQuery, Scope, WordSort, FilterMode } from '@/lib/letterset';
@@ -36,6 +38,9 @@ type SearchState = {
   loading: boolean;
   error: string | null;
   committedQuery: string;
+  // Per-role counts for the number currently showing; null for every other
+  // kind of query. Drives the role checkboxes in FilterPanel.
+  numberRoles: NumberRoleFacet[] | null;
 };
 
 export default function Home() {
@@ -238,6 +243,7 @@ function SearchPage() {
     loading: false,
     error: null,
     committedQuery: '',
+    numberRoles: null,
   });
 
   const abortRef = useRef<AbortController | null>(null);
@@ -297,6 +303,10 @@ function SearchPage() {
     f.raags?.forEach((r) => params.append('raag', r));
     f.writers?.forEach((w) => params.append('writer', w));
     f.sources?.forEach((id) => params.append('source', String(id)));
+    // Sent only once the user has touched the roles. Absent means "use the
+    // heading defaults"; present-but-empty means "show nothing", and the two
+    // must stay distinguishable across a reload of a shared link.
+    if (f.numberRoles) f.numberRoles.forEach((r) => params.append('nrole', r));
     if (f.angMin != null) params.set('ang_min', String(f.angMin));
     if (f.angMax != null) params.set('ang_max', String(f.angMax));
 
@@ -340,6 +350,8 @@ function SearchPage() {
         committedQuery: isLetterSet ? 'letterset' : q,
         lines: page === 0 ? (json.lines ?? []) : [...s.lines, ...(json.lines ?? [])],
         words: page === 0 ? (json.words ?? []) : [...s.words, ...(json.words ?? [])],
+        // Absent on a non-number search, which is what clears the checkboxes.
+        numberRoles: json.numberRoles ?? null,
       }));
     } catch (e) {
       if ((e as Error).name !== 'AbortError') {
@@ -452,6 +464,10 @@ function SearchPage() {
                 raags={raags}
                 writers={writers}
                 corpora={corpora}
+                numberRoleFacets={state.numberRoles}
+                // Offered as soon as the box holds only digits, so the control
+                // is visible while typing rather than appearing after results.
+                showNumberRoles={searchMode === 'contains' && isNumericQuery(query)}
               />
             </div>
           )}

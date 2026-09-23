@@ -41,8 +41,20 @@ export type Shabad = {
   ang_start: number;
 };
 
+// Which numerals on this line matched a number query, for highlighting and for
+// the role chip. Present only on results from search_number_lines; a line can
+// match in two roles at once (ਮਹਲਾ ਪਹਿਲਾ ੧ ਘਰੁ ੧), so roles is an array while
+// the offsets point at the first match.
+export type NumeralMatch = {
+  roles: string[];
+  keywords: string[];
+  charStart: number;
+  charEnd: number;
+};
+
 export type LineWithMeta = Line & {
   shabads: Shabad | null;
+  numeral?: NumeralMatch;
 };
 
 // Raag, writer and scripture are multi-select: an absent or empty array means
@@ -53,6 +65,10 @@ export type SearchFilters = {
   sources?: number[]; // sources.id — which scripture
   angMin?: number;
   angMax?: number;
+  // Only meaningful for a digits-only query (see lib/numbers.ts). An absent
+  // value means the default heading roles, NOT "no filter" — unlike the facets
+  // above, an unfiltered number search would be swamped by verse markers.
+  numberRoles?: string[];
 };
 
 export function activeFilterCount(f: SearchFilters): number {
@@ -63,12 +79,18 @@ export function activeFilterCount(f: SearchFilters): number {
     (f.angMin != null ? 1 : 0) +
     (f.angMax != null ? 1 : 0)
   );
+  // numberRoles is deliberately not counted: it is always set for a numeric
+  // query, so counting it would leave the badge permanently non-zero and stop
+  // meaning "you have narrowed something".
 }
 
 // Options offered by the filter dropdowns, each with how many lines it covers.
 export type WriterFacet = { name: string; lineCount: number; sourceIds: number[] };
 export type RaagFacet = { name: string; lineCount: number };
 export type CorpusFacet = { id: number; code: string; name: string; lineCount: number };
+// Scoped to one number rather than global like the facets above, so it travels
+// with the search response instead of the hour-cached /api/meta payload.
+export type NumberRoleFacet = { role: string; lineCount: number };
 
 // ─── Kosh / dictionary types ──────────────────────────────────────────────────
 

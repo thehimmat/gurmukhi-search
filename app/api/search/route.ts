@@ -4,9 +4,11 @@ import {
   searchFirstLetters,
   searchPattern,
   searchLetterSet,
+  searchNumbers,
   WordViewOptions,
   PAGE_SIZE,
 } from '@/lib/search';
+import { isNumericQuery, parseNumericQuery } from '@/lib/numbers';
 import { SearchFilters } from '@/lib/supabase';
 import { LetterSetQuery, ExtraMode, Scope, VowelMode, WordSort, FilterMode } from '@/lib/letterset';
 
@@ -51,12 +53,19 @@ export async function GET(req: NextRequest) {
   const raags = list('raag');
   const sources = list('source').map((v) => parseInt(v, 10)).filter((n) => !Number.isNaN(n));
 
+  // Number roles arrive the same repeated-param way as the other facets. The
+  // presence of the param is what distinguishes "unchecked everything" (send
+  // nothing) from "never touched it" (use the default heading roles), so an
+  // absent param stays undefined rather than collapsing to [].
+  const numberRoles = sp.has('nrole') ? list('nrole') : undefined;
+
   const filters: SearchFilters = {
     raags: raags.length ? raags : undefined,
     writers: writers.length ? writers : undefined,
     sources: sources.length ? sources : undefined,
     angMin: sp.has('ang_min') ? parseInt(sp.get('ang_min')!, 10) : undefined,
     angMax: sp.has('ang_max') ? parseInt(sp.get('ang_max')!, 10) : undefined,
+    numberRoles,
   };
 
   const view: WordViewOptions = {
@@ -76,7 +85,12 @@ export async function GET(req: NextRequest) {
     if (!query.trim()) {
       return NextResponse.json({ lines: [], total: 0, page, pageSize: PAGE_SIZE });
     }
-    result = await searchContains(query, filters, page);
+    // A bare number is a question about where it appears and in what capacity,
+    // which a substring match cannot answer: ੧ occurs in ~7,200 verse tallies.
+    const value = isNumericQuery(query) ? parseNumericQuery(query) : null;
+    result = value !== null
+      ? await searchNumbers(value, filters, page)
+      : await searchContains(query, filters, page);
   }
 
   if (result.error) {
@@ -88,6 +102,7 @@ export async function GET(req: NextRequest) {
     words: result.words ?? null,
     total: result.total,
     hasMore: result.hasMore ?? null,
+    numberRoles: result.numberRoles ?? null,
     page,
     pageSize: PAGE_SIZE,
   });

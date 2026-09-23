@@ -5,8 +5,15 @@ import {
   WriterFacet,
   RaagFacet,
   CorpusFacet,
+  NumberRoleFacet,
   activeFilterCount,
 } from '@/lib/supabase';
+import {
+  DEFAULT_NUMBER_ROLES,
+  NUMBER_ROLES,
+  NUMBER_ROLE_LABELS,
+  NumberRole,
+} from '@/lib/numbers';
 import MultiSelect, { Option } from './MultiSelect';
 
 type Props = {
@@ -15,6 +22,10 @@ type Props = {
   raags: RaagFacet[];
   writers: WriterFacet[];
   corpora: CorpusFacet[];
+  // Set only while a digits-only query is showing. The counts arrive with the
+  // search response because they are scoped to the number being searched.
+  numberRoleFacets?: NumberRoleFacet[] | null;
+  showNumberRoles?: boolean;
 };
 
 // Writers group by the role their recorded name carries: the Gurus, then the
@@ -29,8 +40,32 @@ function writerGroup(name: string): string {
 }
 const GROUP_ORDER = ['Gurus', 'Bhagats', 'Bhatts', 'Others'];
 
-export default function FilterPanel({ filters, onChange, raags, writers, corpora }: Props) {
+export default function FilterPanel({
+  filters,
+  onChange,
+  raags,
+  writers,
+  corpora,
+  numberRoleFacets,
+  showNumberRoles = false,
+}: Props) {
   const count = activeFilterCount(filters);
+
+  // Counts may not have arrived yet (first keystroke) — the boxes still render,
+  // just without a number beside them, so the filter never pops in late.
+  const countFor = (role: NumberRole) =>
+    numberRoleFacets?.find((f) => f.role === role)?.lineCount;
+
+  const numberRoleOptions: Option[] = NUMBER_ROLES.filter(
+    // A role with no hits for this number is noise; drop it once counts exist.
+    (role) => countFor(role) !== 0,
+  ).map((role) => ({
+    value: role,
+    label: NUMBER_ROLE_LABELS[role],
+    hint: countFor(role)?.toLocaleString(),
+  }));
+
+  const selectedNumberRoles = filters.numberRoles ?? DEFAULT_NUMBER_ROLES;
 
   const writerOptions: Option[] = [...writers]
     .sort((a, b) => {
@@ -74,7 +109,20 @@ export default function FilterPanel({ filters, onChange, raags, writers, corpora
         )}
       </summary>
 
-      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className={`mt-3 grid grid-cols-2 gap-3 ${showNumberRoles ? 'sm:grid-cols-6' : 'sm:grid-cols-5'}`}>
+        {showNumberRoles && (
+          <MultiSelect
+            label="Number is a"
+            allLabel="Any role"
+            options={numberRoleOptions}
+            selected={selectedNumberRoles}
+            // [] is a real state here (show nothing), so it is stored as an
+            // empty array rather than collapsing to undefined the way the
+            // other facets do — undefined means "use the heading defaults".
+            onChange={(vals) => onChange({ ...filters, numberRoles: vals })}
+          />
+        )}
+
         <MultiSelect
           label="Scripture"
           allLabel="All scriptures"
@@ -128,7 +176,7 @@ export default function FilterPanel({ filters, onChange, raags, writers, corpora
 
       {count > 0 && (
         <button
-          onClick={() => onChange({})}
+          onClick={() => onChange(showNumberRoles ? { numberRoles: undefined } : {})}
           className="mt-2 text-xs text-[#8b5e3c] hover:underline"
         >
           Clear all filters

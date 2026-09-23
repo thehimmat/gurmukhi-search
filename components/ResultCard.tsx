@@ -1,6 +1,7 @@
 'use client';
 
 import { LineWithMeta } from '@/lib/supabase';
+import { NUMBER_ROLE_LABELS, NUMBER_ROLE_HELP, NumberRole } from '@/lib/numbers';
 
 type Props = {
   line: LineWithMeta;
@@ -10,7 +11,29 @@ type Props = {
 
 // Highlight occurrences of `needle` in `text` by wrapping them in <mark>.
 // For first_letter and pattern modes we skip highlighting (regex highlighting is complex).
-function HighlightedText({ text, needle, mode }: { text: string; needle: string; mode: Props['mode'] }) {
+function HighlightedText({
+  text,
+  needle,
+  mode,
+  numeral,
+}: {
+  text: string;
+  needle: string;
+  mode: Props['mode'];
+  numeral?: LineWithMeta['numeral'];
+}) {
+  // A number result knows exactly which numeral matched, so highlight by
+  // offset. Matching on the needle would mark every ੧ in the line, including
+  // the verse tallies the role filter just excluded.
+  if (numeral) {
+    return (
+      <>
+        {text.slice(0, numeral.charStart)}
+        <mark className="bg-[#f5d98e] rounded-sm">{text.slice(numeral.charStart, numeral.charEnd)}</mark>
+        {text.slice(numeral.charEnd)}
+      </>
+    );
+  }
   if (mode !== 'contains' || !needle) {
     return <span>{text}</span>;
   }
@@ -36,8 +59,24 @@ export default function ResultCard({ line, query, mode }: Props) {
         className="text-2xl leading-relaxed text-[#1a1008] mb-2"
         style={{ fontFamily: '"Noto Sans Gurmukhi", serif' }}
       >
-        <HighlightedText text={line.gurmukhi} needle={query} mode={mode} />
+        <HighlightedText text={line.gurmukhi} needle={query} mode={mode} numeral={line.numeral} />
       </p>
+
+      {/* Why this line matched a number query: ਮਹਲਾ ਪਹਿਲਾ ੧ ਘਰੁ ੧ matches in
+          two roles at once, so every matched role is shown. */}
+      {line.numeral && line.numeral.roles.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {line.numeral.roles.map((role) => (
+            <span
+              key={role}
+              title={NUMBER_ROLE_HELP[role as NumberRole] ?? role}
+              className="text-xs text-[#7a6045] border border-dashed border-[#c8b89a] rounded-full px-2 py-0.5"
+            >
+              {NUMBER_ROLE_LABELS[role as NumberRole] ?? role}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Transliteration */}
       {line.transliteration_en && (

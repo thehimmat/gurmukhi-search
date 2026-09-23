@@ -9,7 +9,9 @@ import {
   WriterFacet,
   RaagFacet,
   CorpusFacet,
+  NumberRoleFacet,
 } from './supabase';
+import { DEFAULT_NUMBER_ROLES } from './numbers';
 import { compilePattern } from './pattern-compiler';
 import {
   LetterSetQuery,
@@ -37,6 +39,10 @@ export type SearchResult = {
   words?: Word[];
   total: number | null; // null = unknown (line scope skips an expensive exact count)
   hasMore?: boolean; // used when total is null, to drive the "Load more" button
+  // Per-role counts for a number query, so the role checkboxes can be labelled
+  // and a role with no hits disabled. Travels with the result because it is
+  // scoped to the searched value.
+  numberRoles?: NumberRoleFacet[];
   error?: string;
 };
 
@@ -49,6 +55,11 @@ type FlatLineRow = LineWithMeta & {
   writer_id: number | null;
   ang_start: number | null;
   total_count?: number;
+  // search_number_lines only (migration 033 in gurmukhi-kosh).
+  numeral_roles?: string[] | null;
+  numeral_keywords?: string[] | null;
+  char_start?: number | null;
+  char_end?: number | null;
 };
 
 function mapFlatLineRow(r: FlatLineRow): LineWithMeta {
@@ -72,6 +83,15 @@ function mapFlatLineRow(r: FlatLineRow): LineWithMeta {
           ang_start: r.ang_start ?? 0,
         }
       : null,
+    numeral:
+      r.numeral_roles && r.char_start != null && r.char_end != null
+        ? {
+            roles: r.numeral_roles,
+            keywords: r.numeral_keywords ?? [],
+            charStart: r.char_start,
+            charEnd: r.char_end,
+          }
+        : undefined,
   };
 }
 
@@ -340,4 +360,59 @@ export async function listCorpora(): Promise<CorpusFacet[]> {
   if (error) throw new Error(`list_corpora: ${error.message}`);
   return ((data ?? []) as Array<{ id: number; code: string; name: string; line_count: number }>)
     .map((r) => ({ id: Number(r.id), code: r.code, name: r.name, lineCount: Number(r.line_count) }));
+}
+
+// ─── Mode: Number ─────────────────────────────────────────────────────────────
+// A digits-only query searches number_occurrences (migration 032 in
+// gurmukhi-kosh) rather than doing a substring match on lines.gurmukhi, which
+// would return every verse tally in the corpus. Roles come from the DB via
+// list_number_roles, so search holds no copy of the classifier that assigns
+// them — see lib/numbers.ts.
+
+export async function listNumberRoles(value: number): Promise<NumberRoleFacet[]> {
+  const { data, error } = await supabase.rpc('list_number_roles', { p_value: value });
+  if (error) throw new Error(`list_number_roles: ${error.message}`);
+  return ((data ?? []) as Array<{ role: string; line_count: number }>)
+    .map((r) => ({ role: r.role, lineCount: Number(r.line_count) }));
+}
+
+export async function searchNumbers(
+  value: number,
+  filters: SearchFilters = {},
+  page = 0,
+): Promise<SearchResult> {
+  const offset = page * PAGE_SIZE;
+  // An absent selection means the default heading roles, not "everything": an
+  // unfiltered number search is ~90% verse tallies. Sending them explicitly
+  // keeps the RPC's own "empty means all" contract intact for other callers.
+  const roles = filters.numberRoles ?? DEFAULT_NUMBER_ROLES;
+
+  // An empty selection is the user unchecking every box. That means "show
+  // nothing", so it must not fall through to the RPC's "empty means all".
+  if (roles.length === 0) {
+    const numberRoles = await listNumberRoles(value).catch(() => undefined);
+    return { lines: [], total: 0, numberRoles };
+  }
+
+  const [rows, numberRoles] = await Promise.all([
+    supabase.rpc('search_number_lines', {
+      p_value: value,
+      p_roles: roles,
+      ...rpcFilterArgs(filters),
+      p_limit: PAGE_SIZE,
+      p_offset: offset,
+    }),
+    // The counts label the checkboxes; losing them must not lose the results,
+    // so a facet failure degrades to unlabelled boxes rather than an error.
+    listNumberRoles(value).catch(() => undefined),
+  ]);
+
+  if (rows.error) return { lines: [], total: 0, error: rows.error.message };
+
+  const data = (rows.data ?? []) as FlatLineRow[];
+  return {
+    lines: data.map(mapFlatLineRow),
+    total: data.length ? Number(data[0].total_count ?? 0) : 0,
+    numberRoles,
+  };
 }
