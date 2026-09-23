@@ -5,6 +5,7 @@ import {
   NUMBER_ROLE_LABELS,
   isNumericQuery,
   parseNumericQuery,
+  splitBySpans,
   toGurmukhiDigits,
 } from './numbers';
 
@@ -74,5 +75,47 @@ describe('role vocabulary', () => {
     for (const role of NUMBER_ROLES) {
       expect(NUMBER_ROLE_LABELS[role]).toBeTruthy();
     }
+  });
+});
+
+describe('splitBySpans', () => {
+  const line = 'ਰਾਗੁ ਸਿਰੀਰਾਗੁ ਮਹਲਾ ਪਹਿਲਾ ੧ ਘਰੁ ੧ ॥';
+
+  it('marks every span, not just the first', () => {
+    // The real offsets the RPC returns for this line.
+    const parts = splitBySpans(line, [{ start: 25, end: 26 }, { start: 31, end: 32 }]);
+    expect(parts.filter((p) => p.marked).map((p) => p.text)).toEqual(['੧', '੧']);
+  });
+
+  it('reassembles into the original text', () => {
+    const parts = splitBySpans(line, [{ start: 25, end: 26 }, { start: 31, end: 32 }]);
+    expect(parts.map((p) => p.text).join('')).toBe(line);
+  });
+
+  it('returns the whole string unmarked when there are no spans', () => {
+    expect(splitBySpans('ਆਸਾ', [])).toEqual([{ text: 'ਆਸਾ', marked: false }]);
+  });
+
+  it('handles a span at the very start and at the very end', () => {
+    expect(splitBySpans('੧ਅ', [{ start: 0, end: 1 }])).toEqual([
+      { text: '੧', marked: true },
+      { text: 'ਅ', marked: false },
+    ]);
+    expect(splitBySpans('ਅ੧', [{ start: 1, end: 2 }])).toEqual([
+      { text: 'ਅ', marked: false },
+      { text: '੧', marked: true },
+    ]);
+  });
+
+  it('sorts spans that arrive out of order', () => {
+    const parts = splitBySpans('ਅ੧ਬ੨', [{ start: 3, end: 4 }, { start: 1, end: 2 }]);
+    expect(parts.map((p) => p.text).join('')).toBe('ਅ੧ਬ੨');
+    expect(parts.filter((p) => p.marked).map((p) => p.text)).toEqual(['੧', '੨']);
+  });
+
+  it('drops spans that overlap or fall outside the text rather than corrupting it', () => {
+    // Defensive: a bad offset must never reorder or duplicate the line.
+    expect(splitBySpans('ਅ੧', [{ start: 1, end: 2 }, { start: 1, end: 2 }]).map((p) => p.text).join('')).toBe('ਅ੧');
+    expect(splitBySpans('ਅ੧', [{ start: 5, end: 9 }]).map((p) => p.text).join('')).toBe('ਅ੧');
   });
 });

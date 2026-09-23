@@ -1,7 +1,7 @@
 'use client';
 
 import { LineWithMeta } from '@/lib/supabase';
-import { NUMBER_ROLE_LABELS, NUMBER_ROLE_HELP, NumberRole } from '@/lib/numbers';
+import { NUMBER_ROLE_LABELS, NUMBER_ROLE_HELP, NumberRole, splitBySpans } from '@/lib/numbers';
 
 type Props = {
   line: LineWithMeta;
@@ -22,15 +22,17 @@ function HighlightedText({
   mode: Props['mode'];
   numeral?: LineWithMeta['numeral'];
 }) {
-  // A number result knows exactly which numeral matched, so highlight by
+  // A number result knows exactly which numerals matched, so highlight by
   // offset. Matching on the needle would mark every ੧ in the line, including
   // the verse tallies the role filter just excluded.
-  if (numeral) {
+  if (numeral?.spans.length) {
     return (
       <>
-        {text.slice(0, numeral.charStart)}
-        <mark className="bg-[#f5d98e] rounded-sm">{text.slice(numeral.charStart, numeral.charEnd)}</mark>
-        {text.slice(numeral.charEnd)}
+        {splitBySpans(text, numeral.spans).map((part, i) =>
+          part.marked
+            ? <mark key={i} className="bg-[#f5d98e] rounded-sm">{part.text}</mark>
+            : <span key={i}>{part.text}</span>,
+        )}
       </>
     );
   }

@@ -48,8 +48,9 @@ export type Shabad = {
 export type NumeralMatch = {
   roles: string[];
   keywords: string[];
-  charStart: number;
-  charEnd: number;
+  // One span per matched numeral, in reading order. A heading can hold the
+  // same value twice (ਮਹਲਾ ਪਹਿਲਾ ੧ ਘਰੁ ੧) and both are highlighted.
+  spans: { start: number; end: number }[];
 };
 
 export type LineWithMeta = Line & {

@@ -55,12 +55,30 @@ type FlatLineRow = LineWithMeta & {
   writer_id: number | null;
   ang_start: number | null;
   total_count?: number;
-  // search_number_lines only (migration 033 in gurmukhi-kosh).
+  // search_number_lines only (migrations 033/034 in gurmukhi-kosh).
   numeral_roles?: string[] | null;
   numeral_keywords?: string[] | null;
+  // Every matched numeral, added in 034. The scalars are the first match only,
+  // kept while the add-then-remove rollout finishes; drop the fallback once
+  // migration 034 is everywhere.
+  char_starts?: number[] | null;
+  char_ends?: number[] | null;
   char_start?: number | null;
   char_end?: number | null;
 };
+
+// Pair the parallel offset arrays into spans, falling back to the single
+// pre-034 offset pair so a stale RPC still highlights the first match.
+function numeralSpans(r: FlatLineRow): { start: number; end: number }[] {
+  if (r.char_starts?.length && r.char_ends?.length) {
+    return r.char_starts
+      .map((start, i) => ({ start, end: r.char_ends![i] }))
+      .filter((s) => s.end != null);
+  }
+  return r.char_start != null && r.char_end != null
+    ? [{ start: r.char_start, end: r.char_end }]
+    : [];
+}
 
 function mapFlatLineRow(r: FlatLineRow): LineWithMeta {
   const hasShabad = r.raag_english || r.raag_gurmukhi || r.writer_english;
@@ -83,15 +101,13 @@ function mapFlatLineRow(r: FlatLineRow): LineWithMeta {
           ang_start: r.ang_start ?? 0,
         }
       : null,
-    numeral:
-      r.numeral_roles && r.char_start != null && r.char_end != null
-        ? {
-            roles: r.numeral_roles,
-            keywords: r.numeral_keywords ?? [],
-            charStart: r.char_start,
-            charEnd: r.char_end,
-          }
-        : undefined,
+    numeral: r.numeral_roles
+      ? {
+          roles: r.numeral_roles,
+          keywords: r.numeral_keywords ?? [],
+          spans: numeralSpans(r),
+        }
+      : undefined,
   };
 }
 

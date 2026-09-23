@@ -69,3 +69,34 @@ export function toGurmukhiDigits(n: number): string {
     .map((d) => String.fromCodePoint(GURMUKHI_ZERO + Number(d)))
     .join('');
 }
+
+export type Span = { start: number; end: number };
+export type TextPart = { text: string; marked: boolean };
+
+/**
+ * Splits a line into marked and unmarked parts at the given character spans.
+ *
+ * A heading can hold the same number twice — ਮਹਲਾ ਪਹਿਲਾ ੧ ਘਰੁ ੧ — and both
+ * matched, so both are marked; highlighting only the first made the second
+ * look like it had not matched at all.
+ *
+ * Spans are sorted, and any that overlaps the previous one or falls outside
+ * the text is skipped: a bad offset should cost a highlight, never scramble
+ * or duplicate the line it is highlighting.
+ */
+export function splitBySpans(text: string, spans: Span[]): TextPart[] {
+  const usable = [...spans]
+    .filter((s) => s.start >= 0 && s.end <= text.length && s.end > s.start)
+    .sort((a, b) => a.start - b.start);
+
+  const parts: TextPart[] = [];
+  let cursor = 0;
+  for (const span of usable) {
+    if (span.start < cursor) continue; // overlaps what we already emitted
+    if (span.start > cursor) parts.push({ text: text.slice(cursor, span.start), marked: false });
+    parts.push({ text: text.slice(span.start, span.end), marked: true });
+    cursor = span.end;
+  }
+  if (cursor < text.length) parts.push({ text: text.slice(cursor), marked: false });
+  return parts.length ? parts : [{ text, marked: false }];
+}
