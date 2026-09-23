@@ -303,10 +303,19 @@ function SearchPage() {
     f.raags?.forEach((r) => params.append('raag', r));
     f.writers?.forEach((w) => params.append('writer', w));
     f.sources?.forEach((id) => params.append('source', String(id)));
-    // Sent only once the user has touched the roles. Absent means "use the
-    // heading defaults"; present-but-empty means "show nothing", and the two
-    // must stay distinguishable across a reload of a shared link.
-    if (f.numberRoles) f.numberRoles.forEach((r) => params.append('nrole', r));
+    // Three states, and the URL has to tell them apart so a shared link
+    // reproduces what was on screen:
+    //   no param at all   -> never touched, use the heading defaults
+    //   numrole=author... -> exactly these roles
+    //   numrole=          -> every box unticked, show nothing
+    // The last one has no values to list, so it needs an explicit empty param;
+    // without it the URL is indistinguishable from the first case and the
+    // defaults silently come back.
+    if (f.numberRoles?.length) {
+      f.numberRoles.forEach((r) => params.append('numrole', r));
+    } else if (f.numberRoles) {
+      params.set('numrole', '');
+    }
     if (f.angMin != null) params.set('ang_min', String(f.angMin));
     if (f.angMax != null) params.set('ang_max', String(f.angMax));
 

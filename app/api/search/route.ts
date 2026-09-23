@@ -53,11 +53,11 @@ export async function GET(req: NextRequest) {
   const raags = list('raag');
   const sources = list('source').map((v) => parseInt(v, 10)).filter((n) => !Number.isNaN(n));
 
-  // Number roles arrive the same repeated-param way as the other facets. The
-  // presence of the param is what distinguishes "unchecked everything" (send
-  // nothing) from "never touched it" (use the default heading roles), so an
-  // absent param stays undefined rather than collapsing to [].
-  const numberRoles = sp.has('nrole') ? list('nrole') : undefined;
+  // Number roles arrive the same repeated-param way as the other facets.
+  // `list` strips the empty value, so `numrole=` arrives here as [] — which
+  // means "show nothing" — while an absent param stays undefined and picks up
+  // the heading defaults. Presence, not length, is what separates the two.
+  const numberRoles = sp.has('numrole') ? list('numrole') : undefined;
 
   const filters: SearchFilters = {
     raags: raags.length ? raags : undefined,

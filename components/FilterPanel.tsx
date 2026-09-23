@@ -113,7 +113,9 @@ export default function FilterPanel({
         {showNumberRoles && (
           <MultiSelect
             label="Number is a"
-            allLabel="Any role"
+            // Unlike the other facets, an empty selection here means "show
+            // nothing" rather than "no filter", so it must not read "Any".
+            allLabel="No roles"
             options={numberRoleOptions}
             selected={selectedNumberRoles}
             // [] is a real state here (show nothing), so it is stored as an
