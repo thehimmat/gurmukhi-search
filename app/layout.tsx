@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Crimson_Pro, Inter } from "next/font/google";
 import "./globals.css";
-import { SITE_NAME_EN, SITE_NAME_PA, SITE_TITLE } from "@/lib/site";
+import { CORPORA, SITE_NAME_EN, SITE_NAME_PA, SITE_TITLE } from "@/lib/site";
+import { SiteNav } from "@/components/SiteNav";
 
 const crimsonPro = Crimson_Pro({
   variable: "--font-crimson-pro",
@@ -34,8 +35,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="min-h-full flex flex-col antialiased">
         <header style={{ borderBottom: "1px solid var(--border)", backgroundColor: "white" }}>
-          <div style={{ maxWidth: "860px", margin: "0 auto", padding: "0.9rem 1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: "0.6rem" }}>
+          <div style={{ maxWidth: "860px", margin: "0 auto", padding: "0.9rem 1.5rem", display: "flex", flexWrap: "wrap", alignItems: "baseline", justifyContent: "space-between", gap: "0.5rem 1rem" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "0 0.6rem", whiteSpace: "nowrap" }}>
               <a href="/" className="gurmukhi" style={{ fontSize: "1.25rem", fontWeight: 600, color: "var(--text-primary)", textDecoration: "none" }}>
                 {SITE_NAME_PA}
               </a>
@@ -43,16 +44,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 {SITE_NAME_EN}
               </span>
             </div>
-            <a href="https://apps.atthebunga.com" style={{ fontFamily: '"Inter", sans-serif', fontSize: "0.78rem", color: "var(--text-secondary)", textDecoration: "none" }}>
-              apps.atthebunga.com
-            </a>
+            <SiteNav />
           </div>
         </header>
 
         <main className="flex-1">{children}</main>
 
         <footer style={{ borderTop: "1px solid var(--border)", padding: "1.5rem", textAlign: "center", color: "var(--text-secondary)", fontSize: "0.875rem", fontFamily: '"Inter", sans-serif' }}>
-          <p>Word data from <a href="https://banidb.com" target="_blank" rel="noopener noreferrer">BaniDB</a> · Sri Guru Granth Sahib Ji</p>
+          <p>{CORPORA.join(" · ")}</p>
+          <p style={{ marginTop: "0.5rem" }}>
+            <a href="/about" style={{ color: "var(--accent)", textDecoration: "none" }}>Sources &amp; licensing</a>
+            {" · "}
+            <a href="https://apps.atthebunga.com" style={{ color: "var(--accent)", textDecoration: "none" }}>More tools at apps.atthebunga.com</a>
+          </p>
         </footer>
       </body>
     </html>
