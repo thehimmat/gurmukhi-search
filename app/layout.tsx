@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Crimson_Pro, Inter } from "next/font/google";
 import "./globals.css";
+import { SITE_NAME_EN, SITE_NAME_PA, SITE_TITLE } from "@/lib/site";
 
 const crimsonPro = Crimson_Pro({
   variable: "--font-crimson-pro",
@@ -16,7 +17,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "ਗੁਰਬਾਣੀ ਖੋਜ · ਕੋਸ਼ — Gurbani Search & Dictionary",
+  title: SITE_TITLE,
   description: "Search Sri Guru Granth Sahib Ji by line or look up individual words in the Gurmukhi dictionary.",
 };
 
@@ -35,9 +36,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header style={{ borderBottom: "1px solid var(--border)", backgroundColor: "white" }}>
           <div style={{ maxWidth: "860px", margin: "0 auto", padding: "0.9rem 1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: "0.6rem" }}>
-              <a href="/" style={{ fontFamily: '"Crimson Pro", Georgia, serif', fontSize: "1.25rem", fontWeight: 600, color: "var(--text-primary)", textDecoration: "none" }}>
-                ਗੁਰਬਾਣੀ ਖੋਜ · ਕੋਸ਼
+              <a href="/" className="gurmukhi" style={{ fontSize: "1.25rem", fontWeight: 600, color: "var(--text-primary)", textDecoration: "none" }}>
+                {SITE_NAME_PA}
               </a>
+              <span style={{ fontFamily: '"Crimson Pro", Georgia, serif', fontSize: "1.05rem", color: "var(--text-secondary)" }}>
+                {SITE_NAME_EN}
+              </span>
             </div>
             <a href="https://apps.atthebunga.com" style={{ fontFamily: '"Inter", sans-serif', fontSize: "0.78rem", color: "var(--text-secondary)", textDecoration: "none" }}>
               apps.atthebunga.com
