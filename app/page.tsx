@@ -14,6 +14,7 @@ import ScopeToggle from '@/components/ScopeToggle';
 import LetterSetBuilder from '@/components/LetterSetBuilder';
 import WordList from '@/components/WordList';
 import WordResultControls from '@/components/WordResultControls';
+import { LandingShowcase } from '@/components/LandingShowcase';
 import {
   SearchFilters,
   LineWithMeta,
@@ -208,9 +209,7 @@ function KoshSearch() {
       )}
 
       {!query && (
-        <p style={{ color: 'var(--text-secondary)', fontFamily: '"Inter", sans-serif', fontSize: '0.875rem', marginTop: '1rem' }}>
-          Type Gurmukhi text directly, or <a href="/browse">browse by frequency</a>.
-        </p>
+        <LandingShowcase hint={<>Or type Gurmukhi text directly, or <a href="/browse">browse by frequency</a>.</>} />
       )}
     </div>
   );
@@ -555,12 +554,9 @@ function SearchPage() {
             )}
 
             {!state.committedQuery && !state.loading && (
-              <div style={{ textAlign: 'center', padding: '5rem 0', color: 'var(--text-secondary)' }}>
-                <p className="gurmukhi" style={{ fontSize: '4rem', marginBottom: '1rem', opacity: 0.15 }}>ੴ</p>
-                <p style={{ fontFamily: '"Inter", sans-serif', fontSize: '0.875rem' }}>
-                  Enter a search above. Paste Gurmukhi Unicode, or enable phonetic mode and type roman letters.
-                </p>
-              </div>
+              <LandingShowcase
+                hint="Or enter a search above. Paste Gurmukhi Unicode, or enable phonetic mode and type roman letters."
+              />
             )}
           </div>
         </>
