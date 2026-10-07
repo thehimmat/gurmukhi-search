@@ -1,4 +1,6 @@
-# Gurmukhi Search
+# ਗੁਰਬਾਣੀ ਖੋਜ ਕੋਸ਼ — Gurbani Search Dictionary
+
+The search shell for [search.atthebunga.com](https://search.atthebunga.com) (repo name: `gurmukhi-search`); dictionary pages come from `gurmukhi-kosh`.
 
 A multi-mode search engine for Gurbani, the sacred poetry of the Sikh Gurus. Type in Gurmukhi
 (with on-the-fly keyboard transliteration) and search the full text of Sri Guru Granth Sahib
