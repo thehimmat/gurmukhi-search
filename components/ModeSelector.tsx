@@ -7,7 +7,8 @@ type Props = {
   onChange: (m: Mode) => void;
 };
 
-const MODES: { id: Mode; label: string; desc: string }[] = [
+// `hidden` modes still work but are kept off the main page for now.
+const MODES: { id: Mode; label: string; desc: string; hidden?: boolean }[] = [
   {
     id: 'contains',
     label: 'Contains',
@@ -22,18 +23,20 @@ const MODES: { id: Mode; label: string; desc: string }[] = [
     id: 'pattern',
     label: 'Pattern',
     desc: 'Wildcard search: _, *, {nasal}, {bilabial}, etc.',
+    hidden: true,
   },
   {
     id: 'letterset',
     label: 'Letter Set',
     desc: 'Find words built from a set of letters — like Scrabble or Boggle',
+    hidden: true,
   },
 ];
 
 export default function ModeSelector({ value, onChange }: Props) {
   return (
     <div className="flex gap-1 bg-[#f0e4d0] rounded-lg p-1" role="tablist">
-      {MODES.map(m => (
+      {MODES.filter(m => !m.hidden).map(m => (
         <button
           key={m.id}
           role="tab"

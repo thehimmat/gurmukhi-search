@@ -6,8 +6,8 @@ export type KeyLayout = 'gurmukhi-qwerty' | 'igurbani';
 
 const LAYOUT_STORAGE_KEY = 'gurmukhi-input-layout';
 
-export const LAYOUT_OPTIONS: { key: KeyLayout; label: string; hint: string }[] = [
-  { key: 'gurmukhi-qwerty', label: 'Gurmukhi Keyboard', hint: 'macOS Gurmukhi - QWERTY layout (t→ਤ, ⌥t→ਟ)' },
+export const LAYOUT_OPTIONS: { key: KeyLayout; label: string; hint?: string }[] = [
+  { key: 'gurmukhi-qwerty', label: 'Gurmukhi Keyboard' },
   { key: 'igurbani',        label: 'igurbani',           hint: 'igurbani.com phonetic layout (t→ਟ, d→ਡ)' },
 ];
 
@@ -32,31 +32,46 @@ export function useKeyboardLayout() {
 export function KeyboardLayoutSwitch({
   layout,
   onChange,
+  defaultOpen = false,
 }: {
   layout: KeyLayout;
   onChange: (next: KeyLayout) => void;
+  defaultOpen?: boolean;
 }) {
-  const activeHint = LAYOUT_OPTIONS.find(o => o.key === layout)?.hint ?? '';
+  const [open, setOpen] = useState(defaultOpen);
+  const activeHint = LAYOUT_OPTIONS.find(o => o.key === layout)?.hint;
 
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm text-[#7a6045]">
-      <span className="text-xs uppercase tracking-wide text-[#a0896a]">Keyboard</span>
-      <div className="inline-flex rounded-md border border-[#c8b89a] bg-[#f5ede0] p-0.5">
-        {LAYOUT_OPTIONS.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => onChange(key)}
-            className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-              layout === key
-                ? 'bg-white text-[#5c3d1e] shadow-sm'
-                : 'text-[#a0896a] hover:text-[#5c3d1e]'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <span className="text-xs italic opacity-70">{activeHint}</span>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen(o => !o)}
+        className="inline-flex items-center gap-1 text-xs uppercase tracking-wide text-[#a0896a] hover:text-[#5c3d1e]"
+      >
+        Keyboard
+        <span aria-hidden className={`inline-block transition-transform ${open ? 'rotate-90' : ''}`}>›</span>
+      </button>
+      {open && (
+        <>
+          <div className="inline-flex rounded-md border border-[#c8b89a] bg-[#f5ede0] p-0.5">
+            {LAYOUT_OPTIONS.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => onChange(key)}
+                className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                  layout === key
+                    ? 'bg-white text-[#5c3d1e] shadow-sm'
+                    : 'text-[#a0896a] hover:text-[#5c3d1e]'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {activeHint && <span className="text-xs italic opacity-70">{activeHint}</span>}
+        </>
+      )}
     </div>
   );
 }
