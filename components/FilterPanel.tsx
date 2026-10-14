@@ -15,6 +15,7 @@ import {
   NumberRole,
 } from '@/lib/numbers';
 import MultiSelect, { Option } from './MultiSelect';
+import { DEFAULT_SOURCES } from '@/lib/scriptures';
 
 type Props = {
   filters: SearchFilters;
@@ -98,18 +99,9 @@ export default function FilterPanel({
   }
 
   return (
-    <details className="group">
-      <summary className="cursor-pointer text-sm text-[#7a6045] hover:text-[#5c3d1e] select-none list-none flex items-center gap-1">
-        <span className="group-open:rotate-90 transition-transform inline-block">▶</span>
-        Filters
-        {count > 0 && (
-          <span className="ml-1 text-xs bg-[#8b5e3c] text-[#fdf6ec] rounded-full px-1.5">
-            {count}
-          </span>
-        )}
-      </summary>
+    <div>
 
-      <div className={`mt-3 grid grid-cols-2 gap-3 ${showNumberRoles ? 'sm:grid-cols-6' : 'sm:grid-cols-5'}`}>
+      <div className={`grid grid-cols-2 gap-3 ${showNumberRoles ? 'sm:grid-cols-6' : 'sm:grid-cols-5'}`}>
         {showNumberRoles && (
           <MultiSelect
             label="Number is a"
@@ -178,12 +170,12 @@ export default function FilterPanel({
 
       {count > 0 && (
         <button
-          onClick={() => onChange(showNumberRoles ? { numberRoles: undefined } : {})}
+          onClick={() => onChange({ sources: [...DEFAULT_SOURCES], ...(showNumberRoles ? { numberRoles: undefined } : {}) })}
           className="mt-2 text-xs text-[#8b5e3c] hover:underline"
         >
-          Clear all filters
+          Reset filters
         </button>
       )}
-    </details>
+    </div>
   );
 }

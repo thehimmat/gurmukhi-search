@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { isDefaultSources } from './scriptures';
 
 let _client: SupabaseClient | null = null;
 
@@ -76,7 +77,9 @@ export function activeFilterCount(f: SearchFilters): number {
   return (
     (f.raags?.length ? 1 : 0) +
     (f.writers?.length ? 1 : 0) +
-    (f.sources?.length ? 1 : 0) +
+    // The default scriptures are not "narrowing"; any other choice is,
+    // including clearing to all scriptures.
+    (isDefaultSources(f.sources) ? 0 : 1) +
     (f.angMin != null ? 1 : 0) +
     (f.angMax != null ? 1 : 0)
   );

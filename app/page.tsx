@@ -4,7 +4,10 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import SearchBar from '@/components/SearchBar';
 import { useGurmukhiInput } from '@atthebunga/gurmukhi-input';
-import { useKeyboardLayout, KeyboardLayoutSwitch } from '@/components/KeyboardLayoutSwitch';
+import { useKeyboardLayout, KeyboardLayoutOptions } from '@/components/KeyboardLayoutSwitch';
+import { SettingsRow } from '@/components/SettingsRow';
+import { FuzzyToggle, useFuzzySetting } from '@/components/FuzzyToggle';
+import { DEFAULT_SOURCES } from '@/lib/scriptures';
 import ModeSelector from '@/components/ModeSelector';
 import FilterPanel from '@/components/FilterPanel';
 import { isNumericQuery } from '@/lib/numbers';
@@ -23,11 +26,15 @@ import {
   WriterFacet,
   CorpusFacet,
   NumberRoleFacet,
+  activeFilterCount,
 } from '@/lib/supabase';
 import { PAGE_SIZE } from '@/lib/search';
 import { DEFAULT_LETTER_SET_QUERY, LetterSetQuery, Scope, WordSort, FilterMode } from '@/lib/letterset';
 
 type SearchMode = 'contains' | 'first_letter' | 'pattern' | 'letterset';
+
+// Pause after the last keystroke before searching.
+const SEARCH_DEBOUNCE_MS = 250;
 type AppMode = 'gurbani' | 'kosh';
 
 type SearchState = {
@@ -102,10 +109,11 @@ function KoshSearch() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<Word[]>([]);
+  const [results, setResults] = useState<(Word & { match?: 'fold' })[]>([]);
   const [loading, setLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { layout, choose } = useKeyboardLayout();
+  const fuzzy = useFuzzySetting();
   const { onKeyDown, onPaste } = useGurmukhiInput({ value: query, onChange: setQuery, layout });
 
   useEffect(() => {
@@ -114,14 +122,14 @@ function KoshSearch() {
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/words?q=${encodeURIComponent(query.trim())}`);
+        const res = await fetch(`/api/words?q=${encodeURIComponent(query.trim())}${fuzzy.on ? '&fuzzy=1' : ''}`);
         const data = await res.json();
         setResults(data.words ?? []);
       } finally {
         setLoading(false);
       }
     }, 300);
-  }, [query]);
+  }, [query, fuzzy.on]);
 
   function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault();
@@ -164,9 +172,19 @@ function KoshSearch() {
       </form>
 
       <div style={{ marginBottom: '0.5rem' }}>
-        <KeyboardLayoutSwitch
-          layout={layout}
-          onChange={next => { choose(next); inputRef.current?.focus(); }}
+        <SettingsRow
+          items={[
+            {
+              id: 'fuzzy',
+              label: 'Fuzzy',
+              content: <FuzzyToggle on={fuzzy.on} onChange={fuzzy.choose} note="Also match spelling variants (ਤ/ਟ, vowel length, final ੁ/ਿ)" />,
+            },
+            {
+              id: 'keyboard',
+              label: 'Keyboard',
+              content: <KeyboardLayoutOptions layout={layout} onChange={next => { choose(next); inputRef.current?.focus(); }} />,
+            },
+          ]}
         />
       </div>
 
@@ -195,6 +213,9 @@ function KoshSearch() {
                 onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.backgroundColor = 'transparent')}
               >
                 <span className="gurmukhi-lg" style={{ flex: 1 }}>{word.gurmukhi}</span>
+                {word.match === 'fold' && (
+                  <span className="badge" title="Spelling-variant match (fuzzy)">similar</span>
+                )}
                 <span className="badge" title="occurrences in SGGS">{word.frequency.toLocaleString()}×</span>
               </a>
             </li>
@@ -229,7 +250,10 @@ function SearchPage() {
   const [wordSort, setWordSort] = useState<WordSort>('freq_desc');
   const [wordFilter, setWordFilter] = useState('');
   const [wordFilterMode, setWordFilterMode] = useState<FilterMode>('prefix');
-  const [filters, setFilters] = useState<SearchFilters>({});
+  const [filters, setFilters] = useState<SearchFilters>({ sources: [...DEFAULT_SOURCES] });
+  const { layout, choose: chooseLayout } = useKeyboardLayout();
+  const fuzzy = useFuzzySetting();
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [raags, setRaags] = useState<RaagFacet[]>([]);
   const [writers, setWriters] = useState<WriterFacet[]>([]);
   const [corpora, setCorpora] = useState<CorpusFacet[]>([]);
@@ -271,12 +295,6 @@ function SearchPage() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (initialQuery.trim() && appMode === 'gurbani') {
-      runSearch(initialQuery, 'contains', {}, 0);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const runSearch = useCallback(async (q: string, m: SearchMode, f: SearchFilters, page: number) => {
     const isLetterSet = m === 'letterset';
@@ -290,12 +308,9 @@ function SearchPage() {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 
-    setState(s => ({
-      ...s,
-      loading: true,
-      error: null,
-      ...(page === 0 ? { lines: [], words: [], total: 0 } : {}),
-    }));
+    // A new first page keeps the previous results on screen until it lands, so
+    // typing doesn't flash the list empty on every keystroke.
+    setState(s => ({ ...s, loading: true, error: null }));
 
     const params = new URLSearchParams({ mode: m, page: String(page) });
     // Multi-select facets repeat their param once per selected value.
@@ -368,7 +383,17 @@ function SearchPage() {
     }
   }, []);
 
-  function handleSubmit() { runSearch(query, searchMode, filters, 0); }
+  function handleSubmit() { runSearch(query, searchMode, filtersRef.current, 0); }
+
+  // Search as you type: the latest query runs once typing pauses. runSearch
+  // aborts the request before it, so a slow early response can't land over a
+  // newer one. Letter Set has its own builder and still searches on submit.
+  useEffect(() => {
+    if (appMode !== 'gurbani' || searchMode === 'letterset') return;
+    const t = setTimeout(() => runSearch(query, searchMode, filtersRef.current, 0), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, searchMode, appMode]);
   function handleLoadMore() {
     if (state.loading) return;
     runSearch(state.committedQuery, searchMode, filters, state.page + 1);
@@ -453,6 +478,8 @@ function SearchPage() {
                 onChange={setQuery}
                 onSubmit={handleSubmit}
                 mode={searchMode}
+                layout={layout}
+                inputRef={searchInputRef}
               />
             )}
           </div>
@@ -464,21 +491,41 @@ function SearchPage() {
             </div>
           )}
 
-          {!showingWords && (
-            <div style={{ maxWidth: '860px', margin: '0 auto', padding: '0.5rem 1.5rem' }}>
-              <FilterPanel
-                filters={filters}
-                onChange={setFilters}
-                raags={raags}
-                writers={writers}
-                corpora={corpora}
-                numberRoleFacets={state.numberRoles}
-                // Offered as soon as the box holds only digits, so the control
-                // is visible while typing rather than appearing after results.
-                showNumberRoles={searchMode === 'contains' && isNumericQuery(query)}
-              />
-            </div>
-          )}
+          <div style={{ maxWidth: '860px', margin: '0 auto', padding: '0.5rem 1.5rem' }}>
+            <SettingsRow
+              items={[
+                // Filters narrow lines, so they're not offered for word-scope results.
+                ...(showingWords ? [] : [{
+                  id: 'filters',
+                  label: 'Filters',
+                  badge: activeFilterCount(filters),
+                  content: (
+                    <FilterPanel
+                      filters={filters}
+                      onChange={setFilters}
+                      raags={raags}
+                      writers={writers}
+                      corpora={corpora}
+                      numberRoleFacets={state.numberRoles}
+                      // Offered as soon as the box holds only digits, so the control
+                      // is visible while typing rather than appearing after results.
+                      showNumberRoles={searchMode === 'contains' && isNumericQuery(query)}
+                    />
+                  ),
+                }]),
+                {
+                  id: 'fuzzy',
+                  label: 'Fuzzy',
+                  content: <FuzzyToggle on={fuzzy.on} onChange={fuzzy.choose} note="Fuzzy matching for Gurbani lines is coming; today it applies to Dictionary lookups." />,
+                },
+                {
+                  id: 'keyboard',
+                  label: 'Keyboard',
+                  content: <KeyboardLayoutOptions layout={layout} onChange={next => { chooseLayout(next); searchInputRef.current?.focus(); }} />,
+                },
+              ]}
+            />
+          </div>
 
           <div style={{ maxWidth: '860px', margin: '0 auto', padding: '0.5rem 1.5rem 3rem' }}>
             {(hasResults || state.loading) && (

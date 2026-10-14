@@ -2,7 +2,7 @@
 
 import { useRef } from 'react';
 import { useGurmukhiInput } from '@atthebunga/gurmukhi-input';
-import { useKeyboardLayout, KeyboardLayoutSwitch } from './KeyboardLayoutSwitch';
+import type { KeyLayout } from './KeyboardLayoutSwitch';
 
 type Props = {
   value: string;
@@ -10,11 +10,15 @@ type Props = {
   onSubmit: () => void;
   mode: 'contains' | 'first_letter' | 'pattern' | 'letterset';
   placeholder?: string;
+  // Owned by the page so the settings row and this box share one choice.
+  layout: KeyLayout;
+  inputRef?: React.RefObject<HTMLInputElement | null>;
 };
 
-export default function SearchBar({ value, onChange, onSubmit, mode, placeholder }: Props) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const { layout, choose } = useKeyboardLayout();
+// Results populate as you type (the page debounces); Enter searches at once.
+export default function SearchBar({ value, onChange, onSubmit, mode, placeholder, layout, inputRef: externalRef }: Props) {
+  const ownRef = useRef<HTMLInputElement>(null);
+  const inputRef = externalRef ?? ownRef;
 
   const { onKeyDown, onPaste } = useGurmukhiInput({
     value,
@@ -65,19 +69,7 @@ export default function SearchBar({ value, onChange, onSubmit, mode, placeholder
             >×</button>
           )}
         </div>
-        <button
-          onClick={onSubmit}
-          className="px-5 py-3 bg-[#8b5e3c] text-[#fdf6ec] rounded-lg font-medium
-                     hover:bg-[#6d4a2d] transition-colors"
-        >
-          Search
-        </button>
       </div>
-
-      <KeyboardLayoutSwitch
-        layout={layout}
-        onChange={next => { choose(next); inputRef.current?.focus(); }}
-      />
     </div>
   );
 }
