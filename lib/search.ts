@@ -137,8 +137,6 @@ function needsShabadJoin(filters: SearchFilters): boolean {
   return !!(filters.raags?.length || filters.writers?.length);
 }
 
-const COUNT_SELECT = 'id, shabads(raag_english, writer_english)';
-const COUNT_SELECT_INNER = 'id, shabads!inner(raag_english, writer_english)';
 const LINE_SELECT =
   '*, shabads(raag_english, raag_gurmukhi, writer_english, writer_id, ang_start)';
 const LINE_SELECT_INNER =
@@ -164,51 +162,30 @@ export async function searchContains(
   page = 0,
   asRegex = false,
 ): Promise<SearchResult> {
+  if (asRegex) return searchByRegex(searchText, filters, page);
+
+  // No exact total: counting every match read the whole table (0.7-4 s) on
+  // each search. One extra row says whether another page exists instead.
+  // `like`, not `ilike`: Gurmukhi has no case, and both use the trigram index
+  // (kosh 046), but like skips the case-folding work.
   const offset = page * PAGE_SIZE;
-  // Count query
-  let countQ = supabase
-    .from('lines')
-    .select(needsShabadJoin(filters) ? COUNT_SELECT_INNER : COUNT_SELECT, { count: 'exact', head: true });
-
-  countQ = applyFilters(countQ, filters);
-  if (asRegex) {
-    countQ = countQ.filter('gurmukhi', 'cs', searchText); // placeholder; see below
-  } else {
-    countQ = countQ.ilike('gurmukhi', `%${searchText}%`);
-  }
-
-  // For regex, use RPC since Supabase JS doesn't expose ~ directly.
-  // We always use RPC for both count and data to keep it consistent.
-  if (asRegex) {
-    return searchByRegex(searchText, filters, page);
-  }
-
-  countQ = supabase
-    .from('lines')
-    .select(needsShabadJoin(filters) ? COUNT_SELECT_INNER : COUNT_SELECT, { count: 'exact', head: true })
-    .ilike('gurmukhi', `%${searchText}%`);
-  countQ = applyFilters(countQ, filters);
-  const { count, error: countErr } = await countQ;
-  if (countErr) return { lines: [], total: 0, error: countErr.message };
-
   let dataQ = supabase
     .from('lines')
     .select(needsShabadJoin(filters) ? LINE_SELECT_INNER : LINE_SELECT)
-    .ilike('gurmukhi', `%${searchText}%`)
-    // Corpus first (SGGS, then Dasam Bani, then Bhai Gurdas Ji Vaaran), then
-    // reading order within it: (ang, line_no) alone interleaves the corpora.
-    // The rank is lines.corpus_rank (kosh migration 031); migration 005 here
-    // applies the same sort inside the search RPCs.
+    .like('gurmukhi', `%${searchText}%`)
+    // Corpus first (kosh 031/046 reading order), then reading order within it:
+    // (ang, line_no) alone interleaves the corpora.
     .order('corpus_rank', { ascending: true })
     .order('ang', { ascending: true })
     .order('line_no', { ascending: true })
-    .range(offset, offset + PAGE_SIZE - 1);
+    .range(offset, offset + PAGE_SIZE);
   dataQ = applyFilters(dataQ, filters);
 
   const { data, error } = await dataQ;
   if (error) return { lines: [], total: 0, error: error.message };
 
-  return { lines: (data ?? []) as LineWithMeta[], total: count ?? 0 };
+  const rows = (data ?? []) as LineWithMeta[];
+  return { lines: rows.slice(0, PAGE_SIZE), total: null, hasMore: rows.length > PAGE_SIZE };
 }
 
 // ─── Mode 1b: Regex search (via RPC) ─────────────────────────────────────────
