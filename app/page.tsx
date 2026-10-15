@@ -17,7 +17,8 @@ import ScopeToggle from '@/components/ScopeToggle';
 import LetterSetBuilder from '@/components/LetterSetBuilder';
 import WordList from '@/components/WordList';
 import WordResultControls from '@/components/WordResultControls';
-import { LandingShowcase } from '@/components/LandingShowcase';
+import { ShabadFeed, WordFeed } from '@/components/Feeds';
+import { InfiniteList } from '@/components/InfiniteList';
 import {
   SearchFilters,
   LineWithMeta,
@@ -28,7 +29,6 @@ import {
   NumberRoleFacet,
   activeFilterCount,
 } from '@/lib/supabase';
-import { PAGE_SIZE } from '@/lib/search';
 import { DEFAULT_LETTER_SET_QUERY, LetterSetQuery, Scope, WordSort, FilterMode } from '@/lib/letterset';
 
 type SearchMode = 'contains' | 'first_letter' | 'pattern' | 'letterset';
@@ -44,6 +44,8 @@ type SearchState = {
   hasMore: boolean; // used when total is null
   page: number;
   loading: boolean;
+  // True while a further page (not a new search) is loading.
+  loadingMore: boolean;
   error: string | null;
   committedQuery: string;
   // Per-role counts for the number currently showing; null for every other
@@ -230,7 +232,9 @@ function KoshSearch() {
       )}
 
       {!query && (
-        <LandingShowcase hint={<>Or type Gurmukhi text directly, or <a href="/browse">browse by frequency</a>.</>} />
+        <div style={{ marginTop: '1.5rem' }}>
+          <WordFeed />
+        </div>
       )}
     </div>
   );
@@ -264,6 +268,7 @@ function SearchPage() {
     hasMore: false,
     page: 0,
     loading: false,
+    loadingMore: false,
     error: null,
     committedQuery: '',
     numberRoles: null,
@@ -300,7 +305,7 @@ function SearchPage() {
     const isLetterSet = m === 'letterset';
     const empty = isLetterSet ? letterSetRef.current.letters.length === 0 : !q.trim();
     if (empty) {
-      setState(s => ({ ...s, lines: [], words: [], total: 0, error: null, loading: false, committedQuery: '' }));
+      setState(s => ({ ...s, lines: [], words: [], total: 0, error: null, loading: false, loadingMore: false, committedQuery: '' }));
       return;
     }
 
@@ -310,7 +315,7 @@ function SearchPage() {
 
     // A new first page keeps the previous results on screen until it lands, so
     // typing doesn't flash the list empty on every keystroke.
-    setState(s => ({ ...s, loading: true, error: null }));
+    setState(s => ({ ...s, loading: true, loadingMore: page > 0, error: null }));
 
     const params = new URLSearchParams({ mode: m, page: String(page) });
     // Multi-select facets repeat their param once per selected value.
@@ -360,12 +365,13 @@ function SearchPage() {
       const json = await res.json();
 
       if (!res.ok) {
-        setState(s => ({ ...s, loading: false, error: json.error ?? 'Search failed' }));
+        setState(s => ({ ...s, loading: false, loadingMore: false, error: json.error ?? 'Search failed' }));
         return;
       }
 
       setState(s => ({
         loading: false,
+        loadingMore: false,
         error: null,
         total: json.total,
         hasMore: json.hasMore ?? false,
@@ -378,7 +384,7 @@ function SearchPage() {
       }));
     } catch (e) {
       if ((e as Error).name !== 'AbortError') {
-        setState(s => ({ ...s, loading: false, error: 'Search failed' }));
+        setState(s => ({ ...s, loading: false, loadingMore: false, error: 'Search failed' }));
       }
     }
   }, []);
@@ -556,13 +562,19 @@ function SearchPage() {
               />
             )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {showingWords
-                ? hasResults && <WordList words={state.words} />
-                : state.lines.map(line => (
-                    <ResultCard key={line.id} line={line} query={state.committedQuery} mode={searchMode} />
-                  ))}
-            </div>
+            {showingWords
+              ? hasResults && <WordList words={state.words} />
+              : state.committedQuery && (
+                  <InfiniteList
+                    items={state.lines}
+                    getKey={line => line.id}
+                    renderItem={line => <ResultCard line={line} query={state.committedQuery} mode={searchMode} />}
+                    hasMore={hasMore}
+                    loading={state.loadingMore}
+                    error={null}
+                    onLoadMore={handleLoadMore}
+                  />
+                )}
 
             {!state.loading && state.committedQuery && !hasResults && !state.error && (
               <div style={{ textAlign: 'center', padding: '4rem 0', color: 'var(--text-secondary)' }}>
@@ -575,9 +587,10 @@ function SearchPage() {
               </div>
             )}
 
-            {/* Load-more button stays mounted while loading so the click target
-                isn't removed mid-click (which would drop focus and jump scroll). */}
-            {hasMore && (
+            {/* Line results load the next page as you scroll (InfiniteList).
+                Word-scope results (hidden Letter Set / Pattern modes) keep the
+                button until those modes come back. */}
+            {showingWords && hasMore && (
               <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
                 <button
                   type="button"
@@ -586,24 +599,13 @@ function SearchPage() {
                   className={state.loading ? 'animate-pulse' : undefined}
                   style={{ padding: '0.6rem 1.5rem', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '6px', fontFamily: '"Inter", sans-serif', fontSize: '0.875rem', fontWeight: 500, cursor: state.loading ? 'default' : 'pointer', opacity: state.loading ? 0.7 : 1 }}
                 >
-                  {state.loading ? (
-                    'Loading…'
-                  ) : total === null ? (
-                    'Load more'
-                  ) : (
-                    <>
-                      Load {Math.min(PAGE_SIZE, total - showed)} more
-                      <span style={{ marginLeft: '0.4rem', opacity: 0.7, fontSize: '0.8rem' }}>({(total - showed).toLocaleString()} remaining)</span>
-                    </>
-                  )}
+                  {state.loading ? 'Loading…' : 'Load more'}
                 </button>
               </div>
             )}
 
-            {!state.committedQuery && !state.loading && (
-              <LandingShowcase
-                hint="Or enter a search above. Paste Gurmukhi Unicode, or enable phonetic mode and type roman letters."
-              />
+            {!state.committedQuery && (
+              <ShabadFeed sources={filters.sources} />
             )}
           </div>
         </>

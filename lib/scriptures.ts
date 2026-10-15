@@ -15,3 +15,10 @@ export function isDefaultSources(sources: number[] | undefined): boolean {
   if (!sources) return false;
   return sources.length === DEFAULT_SOURCES.length && DEFAULT_SOURCES.every(id => sources.includes(id));
 }
+
+export const SOURCE_NAMES: Record<number, string> = {
+  [SOURCE_IDS.sggs]: 'Sri Guru Granth Sahib Ji',
+  [SOURCE_IDS.dasam]: 'Dasam Bani',
+  [SOURCE_IDS.sarbloh]: 'Sri Sarbloh Granth',
+  [SOURCE_IDS.bhaiGurdas]: 'Bhai Gurdas Ji Vaaran',
+};
