@@ -26,6 +26,7 @@ import {
 import { getWordIndex } from './word-index';
 import type { FuzzyLevel } from './fuzzy';
 import { escapeLike } from './like';
+import { LINE_SELECT } from './feed';
 
 // View options for word-scope Letter Set results (ordering + in-result filter).
 export type WordViewOptions = {
@@ -57,29 +58,20 @@ type FlatLineRow = LineWithMeta & {
   writer_id: number | null;
   ang_start: number | null;
   total_count?: number;
-  // search_number_lines only (migrations 033/034 in gurmukhi-kosh).
+  // search_number_lines only (gurmukhi-kosh 033/034/036): every matched
+  // numeral's offsets, as parallel arrays.
   numeral_roles?: string[] | null;
   numeral_keywords?: string[] | null;
-  // Every matched numeral, added in 034. The scalars are the first match only,
-  // kept while the add-then-remove rollout finishes; drop the fallback once
-  // migration 034 is everywhere.
   char_starts?: number[] | null;
   char_ends?: number[] | null;
-  char_start?: number | null;
-  char_end?: number | null;
 };
 
-// Pair the parallel offset arrays into spans, falling back to the single
-// pre-034 offset pair so a stale RPC still highlights the first match.
+// Pair the parallel offset arrays into spans.
 function numeralSpans(r: FlatLineRow): { start: number; end: number }[] {
-  if (r.char_starts?.length && r.char_ends?.length) {
-    return r.char_starts
-      .map((start, i) => ({ start, end: r.char_ends![i] }))
-      .filter((s) => s.end != null);
-  }
-  return r.char_start != null && r.char_end != null
-    ? [{ start: r.char_start, end: r.char_end }]
-    : [];
+  if (!r.char_starts?.length || !r.char_ends?.length) return [];
+  return r.char_starts
+    .map((start, i) => ({ start, end: r.char_ends![i] }))
+    .filter((s) => s.end != null);
 }
 
 function mapFlatLineRow(r: FlatLineRow): LineWithMeta {
@@ -139,8 +131,6 @@ function needsShabadJoin(filters: SearchFilters): boolean {
   return !!(filters.raags?.length || filters.writers?.length);
 }
 
-const LINE_SELECT =
-  '*, shabads(raag_english, raag_gurmukhi, writer_english, writer_id, ang_start)';
 const LINE_SELECT_INNER =
   '*, shabads!inner(raag_english, raag_gurmukhi, writer_english, writer_id, ang_start)';
 
@@ -156,16 +146,13 @@ function rpcFilterArgs(filters: SearchFilters) {
 }
 
 // ─── Mode 1: Contains ─────────────────────────────────────────────────────────
-// Simple substring / regex search on lines.gurmukhi.
-// `searchText` is treated as a literal substring unless `asRegex` is true.
+// Literal substring search on lines.gurmukhi.
 export async function searchContains(
   searchText: string,
   filters: SearchFilters = {},
   page = 0,
-  asRegex = false,
   fuzzy: FuzzyLevel = 0,
 ): Promise<SearchResult> {
-  if (asRegex) return searchByRegex(searchText, filters, page);
   if (fuzzy > 0) return searchContainsFuzzy(searchText, filters, page, fuzzy);
 
   // The exact total is counted on the first page only, alongside the rows:

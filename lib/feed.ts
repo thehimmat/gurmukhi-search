@@ -108,7 +108,8 @@ export function leadLineIndex(lines: Pick<FeedLine, 'gurmukhi'>[]): number {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Db = { from: (table: string) => any };
 
-const LINE_SELECT =
+// A line with the shabad fields every card shows (also lib/search.ts).
+export const LINE_SELECT =
   '*, shabads(raag_english, raag_gurmukhi, writer_english, writer_id, ang_start)';
 
 // Lines after `after`, in reading order, from the selected scriptures. A

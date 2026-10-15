@@ -18,7 +18,7 @@ beforeEach(() => { db.log.length = 0; db.rpcLog.length = 0; });
 
 describe('fuzzy Contains', () => {
   it('asks search_lines_fuzzy for the level, one row past the page', async () => {
-    const r = await searchContains('ਸਤੀਗੁਰ', { sources: [1, 3] }, 1, false, 2);
+    const r = await searchContains('ਸਤੀਗੁਰ', { sources: [1, 3] }, 1, 2);
     expect(db.rpcLog[0]).toMatchObject({
       fn: 'search_lines_fuzzy',
       args: { p_query: 'ਸਤੀਗੁਰ', p_level: 2, p_sources: [1, 3], p_limit: 21, p_offset: 20 },
@@ -29,24 +29,24 @@ describe('fuzzy Contains', () => {
   });
 
   it('counts every match with count_lines_fuzzy on the first page only', async () => {
-    const first = await searchContains('ਸਤੀਗੁਰ', { sources: [1, 3] }, 0, false, 2);
+    const first = await searchContains('ਸਤੀਗੁਰ', { sources: [1, 3] }, 0, 2);
     expect(db.rpcLog.find(c => c.fn === 'count_lines_fuzzy')).toMatchObject({
       args: { p_query: 'ਸਤੀਗੁਰ', p_level: 2, p_sources: [1, 3] },
     });
     expect(first.total).toBe(137);
     db.rpcLog.length = 0;
-    await searchContains('ਸਤੀਗੁਰ', {}, 1, false, 2);
+    await searchContains('ਸਤੀਗੁਰ', {}, 1, 2);
     expect(db.rpcLog.map(c => c.fn)).toEqual(['search_lines_fuzzy']);
   });
 
   it('reports no exact total when the count reaches its cap', async () => {
-    const r = await searchContains('ਹ', {}, 0, false, 1);
+    const r = await searchContains('ਹ', {}, 0, 1);
     expect(r.total).toBeNull();
     expect(r.hasMore).toBe(true);
   });
 
   it('stays on the exact substring query when fuzzy is off', async () => {
-    await searchContains('ਸਤਿਗੁਰ', {}, 0, false, 0);
+    await searchContains('ਸਤਿਗੁਰ', {}, 0, 0);
     expect(db.rpcLog).toHaveLength(0);
     expect(db.log[0].filters).toContain('gurmukhi like %ਸਤਿਗੁਰ%');
   });

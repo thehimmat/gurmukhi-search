@@ -23,7 +23,7 @@ import { ShabadFeed, WordFeed } from '@/components/Feeds';
 import { InfiniteList } from '@/components/InfiniteList';
 import { NoResults, ResultCount } from '@/components/ResultStatus';
 import { fetchWords, type WordFilters, type WordHit } from '@/lib/words-client';
-import {
+import type {
   SearchFilters,
   LineWithMeta,
   Word,
@@ -31,8 +31,8 @@ import {
   WriterFacet,
   CorpusFacet,
   NumberRoleFacet,
-  activeFilterCount,
 } from '@/lib/supabase';
+import { activeFilterCount } from '@/lib/filters';
 import { DEFAULT_LETTER_SET_QUERY, LetterSetQuery, Scope, WordSort, FilterMode } from '@/lib/letterset';
 
 type SearchMode = 'contains' | 'first_letter' | 'pattern' | 'letterset';

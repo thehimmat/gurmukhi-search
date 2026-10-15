@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_SOURCES, SOURCE_IDS } from './scriptures';
-import { activeFilterCount } from './supabase';
+import { activeFilterCount } from './filters';
 
 describe('default scriptures', () => {
   it('are SGGS and Dasam Bani', () => {

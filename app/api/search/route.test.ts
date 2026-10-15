@@ -24,3 +24,14 @@ describe('/api/search page param', () => {
     expect(body.page).toBe(4);
   });
 });
+
+describe('/api/search errors', () => {
+  it('answers 400, uncached, when the search fails', async () => {
+    const search = await import('@/lib/search');
+    const spy = vi.spyOn(search, 'searchFirstLetters').mockResolvedValue({ lines: [], total: 0, error: 'timeout' });
+    const res = await get('mode=first_letter&q=ਹ');
+    expect(res.status).toBe(400);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    spy.mockRestore();
+  });
+});
