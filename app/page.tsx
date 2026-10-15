@@ -22,7 +22,7 @@ import WordResultControls from '@/components/WordResultControls';
 import { ShabadFeed, WordFeed } from '@/components/Feeds';
 import { InfiniteList } from '@/components/InfiniteList';
 import { NoResults, ResultCount } from '@/components/ResultStatus';
-import { fetchWords, type WordHit } from '@/lib/words-client';
+import { fetchWords, type WordFilters, type WordHit } from '@/lib/words-client';
 import {
   SearchFilters,
   LineWithMeta,
@@ -111,7 +111,7 @@ function SegmentedControl({ value, onChange }: { value: AppMode; onChange: (v: A
   );
 }
 
-function KoshSearch() {
+function KoshSearch({ writers, corpora }: { writers: WriterFacet[]; corpora: CorpusFacet[] }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
@@ -121,6 +121,9 @@ function KoshSearch() {
   // The query the shown results answer, so "no results" waits for the lookup
   // of what's typed now rather than showing during the debounce.
   const [settled, setSettled] = useState('');
+  // Same default scriptures as Gurbani search; the filter is applied in the
+  // database (kosh 052), and a word's count is its count inside the selection.
+  const [filters, setFilters] = useState<WordFilters>({ sources: [...DEFAULT_SOURCES] });
   const { layout, choose } = useKeyboardLayout();
   const fuzzy = useFuzzyLevel();
   const { onKeyDown, onPaste } = useGurmukhiInput({ value: query, onChange: setQuery, layout });
@@ -134,7 +137,7 @@ function KoshSearch() {
     const t = setTimeout(async () => {
       setLoading(true);
       try {
-        const words = await fetchWords(q, fuzzy.level, ctrl.signal);
+        const words = await fetchWords(q, fuzzy.level, ctrl.signal, filters);
         setResults(words);
         setError(null);
         setSettled(q);
@@ -147,7 +150,7 @@ function KoshSearch() {
       }
     }, 300);
     return () => { clearTimeout(t); ctrl.abort(); };
-  }, [query, fuzzy.level]);
+  }, [query, fuzzy.level, filters]);
 
   function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault();
@@ -193,6 +196,21 @@ function KoshSearch() {
         <SettingsRow
           items={[
             {
+              id: 'filters',
+              label: 'Filters',
+              badge: activeFilterCount(filters),
+              content: (
+                <FilterPanel
+                  facets="words"
+                  filters={filters}
+                  onChange={f => setFilters({ sources: f.sources, writers: f.writers })}
+                  raags={[]}
+                  writers={writers}
+                  corpora={corpora}
+                />
+              ),
+            },
+            {
               id: 'fuzzy',
               label: 'Fuzzy',
               content: <FuzzyLevelPicker level={fuzzy.level} onChange={fuzzy.choose} />,
@@ -234,7 +252,7 @@ function KoshSearch() {
                 {word.match === 'fold' && (
                   <span className="badge" title="Spelling-variant match (fuzzy)">similar</span>
                 )}
-                <span className="badge" title="occurrences in SGGS">{word.frequency.toLocaleString()}×</span>
+                <span className="badge" title="occurrences in the selected scriptures">{word.frequency.toLocaleString()}×</span>
               </a>
             </li>
           ))}
@@ -484,7 +502,7 @@ function SearchPage() {
       </div>
 
       {/* Kosh mode */}
-      {appMode === 'kosh' && <KoshSearch />}
+      {appMode === 'kosh' && <KoshSearch writers={writers} corpora={corpora} />}
 
       {/* Gurbani search mode */}
       {appMode === 'gurbani' && (

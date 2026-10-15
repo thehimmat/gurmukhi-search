@@ -19,6 +19,15 @@ describe('fetchWords', () => {
     expect(fetch.mock.calls[0][0]).toBe(`/api/words?q=${encodeURIComponent('ਨਾਮ')}`);
   });
 
+  it('sends the scripture and writer filters', async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response('{"words":[]}'));
+    vi.stubGlobal('fetch', fetch);
+    await fetchWords('ਨਾਮ', 0, undefined, { sources: [3, 1], writers: ['Guru Arjan Dev Ji'] });
+    const url = new URL(fetch.mock.calls[0][0], 'http://x');
+    expect(url.searchParams.getAll('source')).toEqual(['1', '3']);
+    expect(url.searchParams.getAll('writer')).toEqual(['Guru Arjan Dev Ji']);
+  });
+
   it('throws on an error response instead of reading it as no words', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{"error":"timeout"}', { status: 500 })));
     await expect(fetchWords('ਨਾਮ', 0)).rejects.toThrow('timeout');

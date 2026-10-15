@@ -9,6 +9,10 @@ const words = [
   { id: 5, gurmukhi: 'ਸ%ਦ', frequency: 1, in_corpus: true },
 ];
 const db = fakeSupabase({ words }, {
+  search_words_filtered: () => [
+    { id: 1, gurmukhi: 'ਸਬਦੁ', frequency: 6, exact: true },
+    { id: 3, gurmukhi: 'ਸ਼ਬਦੁ', frequency: 2, exact: false },
+  ],
   search_words_fuzzy: () => [
     { id: 1, gurmukhi: 'ਸਬਦੁ', frequency: 9, exact: true },
     { id: 3, gurmukhi: 'ਸ਼ਬਦੁ', frequency: 4, exact: false },
@@ -50,6 +54,22 @@ describe('/api/words', () => {
   it('falls back to 20 for a limit that is not a number', async () => {
     await get('q=ਸਬਦ&limit=abc');
     expect(db.log[0].limit).toBe(20);
+  });
+
+  it('searches within the selected scriptures and writers', async () => {
+    const body = await (await get('q=ਸਬਦ&source=1&source=3&writer=Guru%20Arjan%20Dev%20Ji')).json();
+    expect(db.rpcLog[0]).toMatchObject({
+      fn: 'search_words_filtered',
+      args: { p_query: 'ਸਬਦ', p_level: 0, p_sources: [1, 3], p_writers: ['Guru Arjan Dev Ji'], p_limit: 20 },
+    });
+    // Frequency is the count inside the selection; exact spellings aren't marked.
+    expect(body.words[0]).toEqual({ id: 1, gurmukhi: 'ਸਬਦੁ', frequency: 6 });
+  });
+
+  it('marks variant spellings when a filtered search is fuzzy', async () => {
+    const body = await (await get('q=ਸਬਦ&source=1&fuzzy=2')).json();
+    expect(db.rpcLog[0].args).toMatchObject({ p_level: 2, p_sources: [1], p_writers: null });
+    expect(body.words[1]).toEqual({ id: 3, gurmukhi: 'ਸ਼ਬਦੁ', frequency: 2, match: 'fold' });
   });
 
   it('is cacheable at the CDN', async () => {
