@@ -1,16 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { foldGurmukhi } from '@/lib/gurmukhi-fold';
 import { CDN_CACHE } from '@/lib/cache';
+import { parseFuzzyLevel } from '@/lib/fuzzy';
 
 type WordHit = { id: number; gurmukhi: string; frequency: number; match?: 'fold' };
 
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get('q')?.trim() ?? '';
   const limit = Math.min(parseInt(req.nextUrl.searchParams.get('limit') ?? '20'), 50);
-  const fuzzy = req.nextUrl.searchParams.get('fuzzy') === '1';
+  const fuzzy = parseFuzzyLevel(req.nextUrl.searchParams.get('fuzzy'));
 
   if (!q) return NextResponse.json({ words: [] }, { headers: { 'Cache-Control': CDN_CACHE } });
+
+  // Fuzzy (kosh 047): prefix on the folded spelling, exact spellings first.
+  // Variant spellings are marked so the UI can label them.
+  if (fuzzy > 0) {
+    const { data, error } = await supabase.rpc('search_words_fuzzy', { p_query: q, p_level: fuzzy, p_limit: limit });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const words: WordHit[] = ((data ?? []) as Array<WordHit & { exact: boolean }>).map(({ exact, ...w }) =>
+      exact ? w : { ...w, match: 'fold' as const });
+    return NextResponse.json({ words }, { headers: { 'Cache-Control': CDN_CACHE } });
+  }
 
   // Exact prefix match first
   const { data, error } = await supabase
@@ -22,29 +32,8 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const hits: WordHit[] = [...(data ?? [])];
-
-  // Fuzzy: prefix on the folded spelling key (gurmukhi-kosh#63), ranked after
-  // the exact hits and marked so the UI can tell them apart.
-  if (fuzzy && hits.length < limit) {
-    const folded = foldGurmukhi(q);
-    if (folded) {
-      const { data: foldHits } = await supabase
-        .from('words')
-        .select('id, gurmukhi, frequency')
-        .like('search_fold', `${folded}%`)
-        .order('frequency', { ascending: false })
-        .limit(limit);
-      const seen = new Set(hits.map(h => h.id));
-      for (const w of foldHits ?? []) {
-        if (hits.length >= limit) break;
-        if (!seen.has(w.id)) hits.push({ ...w, match: 'fold' });
-      }
-    }
-  }
-
   // Fallback: substring match
-  if (hits.length === 0) {
+  if (!data || data.length === 0) {
     const { data: substring, error: substringErr } = await supabase
       .from('words')
       .select('id, gurmukhi, frequency')
@@ -56,5 +45,5 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ words: substring ?? [] }, { headers: { 'Cache-Control': CDN_CACHE } });
   }
 
-  return NextResponse.json({ words: hits }, { headers: { 'Cache-Control': CDN_CACHE } });
+  return NextResponse.json({ words: data }, { headers: { 'Cache-Control': CDN_CACHE } });
 }

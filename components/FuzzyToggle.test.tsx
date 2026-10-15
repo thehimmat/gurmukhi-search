@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { FuzzyToggle } from './FuzzyToggle';
+import { FuzzyLevelPicker } from './FuzzyToggle';
 
-describe('FuzzyToggle', () => {
-  it('is an on/off switch', () => {
-    expect(renderToStaticMarkup(<FuzzyToggle on={false} onChange={() => {}} />))
-      .toContain('role="switch" aria-checked="false"');
-    expect(renderToStaticMarkup(<FuzzyToggle on onChange={() => {}} />))
-      .toContain('role="switch" aria-checked="true"');
+describe('FuzzyLevelPicker', () => {
+  it('is a radio group of Off / Low / Medium / High with Off selected by default', () => {
+    const html = renderToStaticMarkup(<FuzzyLevelPicker level={0} onChange={() => {}} />);
+    expect(html).toContain('role="radiogroup"');
+    expect(html.match(/role="radio"/g)).toHaveLength(4);
+    expect(html).toMatch(/aria-checked="true"[^>]*>Off</);
+    expect(html.indexOf('>Off<')).toBeLessThan(html.indexOf('>High<'));
   });
 });

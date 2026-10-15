@@ -24,6 +24,7 @@ import {
   filterWords,
 } from './letterset';
 import { getWordIndex } from './word-index';
+import type { FuzzyLevel } from './fuzzy';
 
 // View options for word-scope Letter Set results (ordering + in-result filter).
 export type WordViewOptions = {
@@ -161,8 +162,10 @@ export async function searchContains(
   filters: SearchFilters = {},
   page = 0,
   asRegex = false,
+  fuzzy: FuzzyLevel = 0,
 ): Promise<SearchResult> {
   if (asRegex) return searchByRegex(searchText, filters, page);
+  if (fuzzy > 0) return searchContainsFuzzy(searchText, filters, page, fuzzy);
 
   // No exact total: counting every match read the whole table (0.7-4 s) on
   // each search. One extra row says whether another page exists instead.
@@ -186,6 +189,27 @@ export async function searchContains(
 
   const rows = (data ?? []) as LineWithMeta[];
   return { lines: rows.slice(0, PAGE_SIZE), total: null, hasMore: rows.length > PAGE_SIZE };
+}
+
+// Fuzzy Contains (kosh 047): the database folds the line and the query at
+// this level, and for High also lets one letter be anything. Same paging as
+// above: one extra row instead of a count.
+async function searchContainsFuzzy(
+  searchText: string,
+  filters: SearchFilters,
+  page: number,
+  level: FuzzyLevel,
+): Promise<SearchResult> {
+  const { data, error } = await supabase.rpc('search_lines_fuzzy', {
+    p_query: searchText,
+    p_level: level,
+    ...rpcFilterArgs(filters),
+    p_limit: PAGE_SIZE + 1,
+    p_offset: page * PAGE_SIZE,
+  });
+  if (error) return { lines: [], total: 0, error: error.message };
+  const rows = (data ?? []) as FlatLineRow[];
+  return { lines: rows.slice(0, PAGE_SIZE).map(mapFlatLineRow), total: null, hasMore: rows.length > PAGE_SIZE };
 }
 
 // ─── Mode 1b: Regex search (via RPC) ─────────────────────────────────────────
@@ -233,14 +257,17 @@ export async function searchFirstLetters(
   letters: string,
   filters: SearchFilters = {},
   page = 0,
+  fuzzy: FuzzyLevel = 0,
 ): Promise<SearchResult> {
   if (!letters.trim()) return { lines: [], total: 0 };
 
   const gurmukhi_letters = [...letters]; // split by codepoint
   const offset = page * PAGE_SIZE;
 
-  const { data, error } = await supabase.rpc('search_first_letters', {
+  // Fuzzy levels fold the letters and each line's first letters (kosh 047).
+  const { data, error } = await supabase.rpc(fuzzy > 0 ? 'search_first_letters_fuzzy' : 'search_first_letters', {
     p_letters: gurmukhi_letters,
+    ...(fuzzy > 0 ? { p_level: fuzzy } : {}),
     ...rpcFilterArgs(filters),
     p_limit: PAGE_SIZE,
     p_offset: offset,
