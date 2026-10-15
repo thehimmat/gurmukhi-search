@@ -25,7 +25,7 @@ export function ShabadFeed({ sources }: { sources?: number[] }) {
       loading={feed.loading}
       error={feed.error}
       onLoadMore={feed.loadMore}
-      estimateSize={360}
+      estimateSize={150}
     />
   );
 }

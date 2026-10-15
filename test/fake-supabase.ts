@@ -31,8 +31,18 @@ export function fakeSupabase(tables: Record<string, Row[]>, rpcs: Record<string,
     let lim: number | undefined;
     let from_ = 0;
 
-    const like = (pattern: string) =>
-      new RegExp('^' + pattern.split('%').map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$', 's');
+    // SQL LIKE: % is any run, _ is any one character, \ escapes either.
+    const like = (pattern: string) => {
+      let re = '';
+      for (let i = 0; i < pattern.length; i++) {
+        const c = pattern[i];
+        if (c === '\\' && i + 1 < pattern.length) re += pattern[++i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        else if (c === '%') re += '.*';
+        else if (c === '_') re += '.';
+        else re += c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      }
+      return new RegExp('^' + re + '$', 's');
+    };
 
     const b = {
       select(_cols?: string, opts?: { count?: string; head?: boolean }) {

@@ -5,6 +5,8 @@ import { fakeSupabase } from '@/test/fake-supabase';
 const words = [
   { id: 1, gurmukhi: 'ਸਬਦੁ', frequency: 9, in_corpus: true },
   { id: 2, gurmukhi: 'ਸਬਦਿ', frequency: 5, in_corpus: true },
+  { id: 4, gurmukhi: 'ਸਬਦਾਂ', frequency: 0, in_corpus: false },
+  { id: 5, gurmukhi: 'ਸ%ਦ', frequency: 1, in_corpus: true },
 ];
 const db = fakeSupabase({ words }, {
   search_words_fuzzy: () => [
@@ -32,6 +34,22 @@ describe('/api/words', () => {
       { id: 1, gurmukhi: 'ਸਬਦੁ', frequency: 9 },
       { id: 3, gurmukhi: 'ਸ਼ਬਦੁ', frequency: 4, match: 'fold' },
     ]);
+  });
+
+  it('leaves out dictionary head-words the corpus never uses', async () => {
+    const body = await (await get('q=ਸਬਦ')).json();
+    expect(body.words.map((w: { id: number }) => w.id)).not.toContain(4);
+  });
+
+  it('treats % and _ in the query as text', async () => {
+    const body = await (await get('q=ਸ%')).json();
+    expect(body.words.map((w: { id: number }) => w.id)).toEqual([5]);
+    expect(db.log[0].filters.join(' ')).toContain('like ਸ\\%%');
+  });
+
+  it('falls back to 20 for a limit that is not a number', async () => {
+    await get('q=ਸਬਦ&limit=abc');
+    expect(db.log[0].limit).toBe(20);
   });
 
   it('is cacheable at the CDN', async () => {

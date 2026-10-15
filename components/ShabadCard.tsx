@@ -1,14 +1,18 @@
 'use client';
 
-import type { ShabadGroup } from '@/lib/feed';
+import { useState } from 'react';
+import { leadLineIndex, type FeedLine, type ShabadGroup } from '@/lib/feed';
 import { SOURCE_IDS, SOURCE_NAMES } from '@/lib/scriptures';
 
 // One shabad (or, for Sri Sarbloh Granth, one ang) from the reading feed:
-// where it is, then its lines with their translations.
+// where it is, then its opening line, like a search result. The rest of the
+// shabad opens in place.
 export function ShabadCard({ group }: { group: ShabadGroup }) {
+  const [expanded, setExpanded] = useState(false);
   const first = group.lines[0];
   const shabad = first.shabads;
   const sggs = first.source_fk === SOURCE_IDS.sggs;
+  const shown = expanded ? group.lines : [group.lines[leadLineIndex(group.lines)]];
 
   return (
     <article className="rounded-lg border border-[#ddd0be] bg-[#fdf9f3] p-4">
@@ -26,17 +30,33 @@ export function ShabadCard({ group }: { group: ShabadGroup }) {
       </header>
 
       <div className="flex flex-col gap-2">
-        {group.lines.map(l => (
-          <div key={l.id}>
-            <p className="text-xl leading-relaxed text-[#1a1008]" style={{ fontFamily: '"Noto Sans Gurmukhi", serif' }}>
-              {l.gurmukhi}
-            </p>
-            {l.translation_en && (
-              <p className="text-sm text-[#5c3d1e]" style={{ fontFamily: '"Crimson Pro", serif' }}>{l.translation_en}</p>
-            )}
-          </div>
-        ))}
+        {shown.map(l => <Line key={l.id} line={l} />)}
       </div>
+
+      {group.lines.length > 1 && (
+        <button
+          type="button"
+          onClick={() => setExpanded(e => !e)}
+          aria-expanded={expanded}
+          className="mt-2 text-xs text-[#8b5e3c] hover:underline"
+          style={{ fontFamily: '"Inter", sans-serif' }}
+        >
+          {expanded ? 'Show less' : `Show all ${group.lines.length} lines`}
+        </button>
+      )}
     </article>
+  );
+}
+
+function Line({ line }: { line: FeedLine }) {
+  return (
+    <div>
+      <p className="text-xl leading-relaxed text-[#1a1008]" style={{ fontFamily: '"Noto Sans Gurmukhi", serif' }}>
+        {line.gurmukhi}
+      </p>
+      {line.translation_en && (
+        <p className="text-sm text-[#5c3d1e]" style={{ fontFamily: '"Crimson Pro", serif' }}>{line.translation_en}</p>
+      )}
+    </div>
   );
 }

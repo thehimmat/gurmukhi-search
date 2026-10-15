@@ -80,6 +80,28 @@ export function mergeGroups(existing: ShabadGroup[], incoming: ShabadGroup[]): S
   return [...existing, ...incoming];
 }
 
+// ─── Lead line ───────────────────────────────────────────────────────────────
+
+// A feed card shows one line per shabad, like a search result. Many shabads
+// open with a heading rather than verse ("ਸਲੋਕੁ ॥", "ਪਉੜੀ ੧ (ਮੰਗਲਾਚਰਣ)",
+// "ਭੁਜੰਗ ਪ੍ਰਯਾਤ ਛੰਦ ॥", "ਗਉੜੀ ਮਹਲਾ ੫ ॥"), and the data has no heading flag, so
+// a line counts as one when it is very short or a short line naming a form.
+// The length limit keeps the Mool Mantar, which ends in ਪ੍ਰਸਾਦਿ, as verse.
+const HEADING_WORD = /ਛੰਦ|ਸਲੋਕ|ਪਉੜੀ|ਮਹਲਾ|ਪ੍ਰਸਾਦਿ|ਦੋਹ|ਸੋਰਠਾ|ਸਵੈਯਾ|ਸ੍ਵੈਯਾ|ਚੌਪਈ|ਚਉਪਈ|ਕਬਿੱਤ|ਕਬਿਤ/;
+const HAS_LETTER = /[\u0A05-\u0A39\u0A72-\u0A74]/;
+
+function isHeading(gurmukhi: string): boolean {
+  const words = gurmukhi.split(/\s+/).filter(t => HAS_LETTER.test(t)).length;
+  return words <= 3 || (words <= 6 && HEADING_WORD.test(gurmukhi));
+}
+
+// Index of the line a card leads with: the first that isn't a heading, or the
+// first line if they all are.
+export function leadLineIndex(lines: Pick<FeedLine, 'gurmukhi'>[]): number {
+  const i = lines.findIndex(l => !isHeading(l.gurmukhi));
+  return i === -1 ? 0 : i;
+}
+
 // ─── Queries ─────────────────────────────────────────────────────────────────
 
 // Just the supabase-js builder surface the feeds use.
