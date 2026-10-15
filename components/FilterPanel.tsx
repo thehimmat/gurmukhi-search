@@ -27,6 +27,9 @@ type Props = {
   // search response because they are scoped to the number being searched.
   numberRoleFacets?: NumberRoleFacet[] | null;
   showNumberRoles?: boolean;
+  // Word search filters by where a word is used (scripture, writer); raag and
+  // ang range narrow lines, so they're left out there.
+  facets?: 'lines' | 'words';
 };
 
 // Writers group by the role their recorded name carries: the Gurus, then the
@@ -49,7 +52,9 @@ export default function FilterPanel({
   corpora,
   numberRoleFacets,
   showNumberRoles = false,
+  facets = 'lines',
 }: Props) {
+  const lineFacets = facets === 'lines';
   const count = activeFilterCount(filters);
 
   // Counts may not have arrived yet (first keystroke) — the boxes still render,
@@ -101,7 +106,7 @@ export default function FilterPanel({
   return (
     <div>
 
-      <div className={`grid grid-cols-2 gap-3 ${showNumberRoles ? 'sm:grid-cols-6' : 'sm:grid-cols-5'}`}>
+      <div className={`grid grid-cols-2 gap-3 ${!lineFacets ? 'sm:grid-cols-2' : showNumberRoles ? 'sm:grid-cols-6' : 'sm:grid-cols-5'}`}>
         {showNumberRoles && (
           <MultiSelect
             label="Number is a"
@@ -135,37 +140,41 @@ export default function FilterPanel({
           onChange={(vals) => onChange({ ...filters, writers: vals.length ? vals : undefined })}
         />
 
-        <MultiSelect
-          label="Raag"
-          allLabel="All raags"
-          options={raagOptions}
-          selected={filters.raags ?? []}
-          onChange={(vals) => onChange({ ...filters, raags: vals.length ? vals : undefined })}
-        />
+        {lineFacets && (
+          <>
+            <MultiSelect
+              label="Raag"
+              allLabel="All raags"
+              options={raagOptions}
+              selected={filters.raags ?? []}
+              onChange={(vals) => onChange({ ...filters, raags: vals.length ? vals : undefined })}
+            />
 
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-[#7a6045] font-medium uppercase tracking-wide">Ang from</span>
-          <input
-            type="number"
-            min={1} max={1430}
-            value={filters.angMin ?? ''}
-            onChange={e => setAng('angMin', e.target.value ? parseInt(e.target.value) : undefined)}
-            placeholder="1"
-            className="px-2 py-1.5 rounded border border-[#c8b89a] bg-[#fdf6ec] text-sm text-[#3d2b1f]"
-          />
-        </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-[#7a6045] font-medium uppercase tracking-wide">Ang from</span>
+              <input
+                type="number"
+                min={1} max={1430}
+                value={filters.angMin ?? ''}
+                onChange={e => setAng('angMin', e.target.value ? parseInt(e.target.value) : undefined)}
+                placeholder="1"
+                className="px-2 py-1.5 rounded border border-[#c8b89a] bg-[#fdf6ec] text-sm text-[#3d2b1f]"
+              />
+            </label>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-[#7a6045] font-medium uppercase tracking-wide">Ang to</span>
-          <input
-            type="number"
-            min={1} max={1430}
-            value={filters.angMax ?? ''}
-            onChange={e => setAng('angMax', e.target.value ? parseInt(e.target.value) : undefined)}
-            placeholder="1430"
-            className="px-2 py-1.5 rounded border border-[#c8b89a] bg-[#fdf6ec] text-sm text-[#3d2b1f]"
-          />
-        </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-[#7a6045] font-medium uppercase tracking-wide">Ang to</span>
+              <input
+                type="number"
+                min={1} max={1430}
+                value={filters.angMax ?? ''}
+                onChange={e => setAng('angMax', e.target.value ? parseInt(e.target.value) : undefined)}
+                placeholder="1430"
+                className="px-2 py-1.5 rounded border border-[#c8b89a] bg-[#fdf6ec] text-sm text-[#3d2b1f]"
+              />
+            </label>
+          </>
+        )}
       </div>
 
       {count > 0 && (

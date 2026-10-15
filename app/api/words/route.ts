@@ -13,6 +13,25 @@ export async function GET(req: NextRequest) {
 
   if (!q) return NextResponse.json({ words: [] }, { headers: { 'Cache-Control': CDN_CACHE } });
 
+  // Scripture / Writer filters (kosh 052): words attested in the selection,
+  // most frequent within it, with that in-selection frequency.
+  const sp = req.nextUrl.searchParams;
+  const sources = sp.getAll('source').map((v) => parseInt(v, 10)).filter((n) => !Number.isNaN(n));
+  const writers = sp.getAll('writer').map((v) => v.trim()).filter(Boolean);
+  if (sources.length || writers.length) {
+    const { data, error } = await supabase.rpc('search_words_filtered', {
+      p_query: q,
+      p_level: fuzzy,
+      p_sources: sources.length ? sources : null,
+      p_writers: writers.length ? writers : null,
+      p_limit: limit,
+    });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const words: WordHit[] = ((data ?? []) as Array<WordHit & { exact: boolean }>).map(({ exact, ...w }) =>
+      exact || !fuzzy ? w : { ...w, match: 'fold' as const });
+    return NextResponse.json({ words }, { headers: { 'Cache-Control': CDN_CACHE } });
+  }
+
   // Fuzzy (kosh 047): prefix on the folded spelling, exact spellings first.
   // Variant spellings are marked so the UI can label them.
   if (fuzzy > 0) {
