@@ -10,6 +10,7 @@ import {
   PAGE_SIZE,
 } from '@/lib/search';
 import { isNumericQuery, parseNumericQuery } from '@/lib/numbers';
+import { parseFuzzyLevel } from '@/lib/fuzzy';
 import { SearchFilters } from '@/lib/supabase';
 import { LetterSetQuery, ExtraMode, Scope, VowelMode, WordSort, FilterMode } from '@/lib/letterset';
 
@@ -45,6 +46,7 @@ export async function GET(req: NextRequest) {
   const query = sp.get('q') ?? '';
   const page = Math.max(0, parseInt(sp.get('page') ?? '0', 10));
   const scope: Scope = sp.get('scope') === 'word' ? 'word' : 'line';
+  const fuzzy = parseFuzzyLevel(sp.get('fz'));
 
   // Multi-select facets arrive as repeated params (raag=a&raag=b). A single
   // value still works, so existing links keep resolving.
@@ -79,7 +81,7 @@ export async function GET(req: NextRequest) {
   if (mode === 'letterset') {
     result = await searchLetterSet(parseLetterSet(sp), filters, page, view);
   } else if (mode === 'first_letter') {
-    result = await searchFirstLetters(query, filters, page);
+    result = await searchFirstLetters(query, filters, page, fuzzy);
   } else if (mode === 'pattern') {
     result = await searchPattern(query, filters, page, scope);
   } else {
@@ -91,7 +93,7 @@ export async function GET(req: NextRequest) {
     const value = isNumericQuery(query) ? parseNumericQuery(query) : null;
     result = value !== null
       ? await searchNumbers(value, filters, page)
-      : await searchContains(query, filters, page);
+      : await searchContains(query, filters, page, false, fuzzy);
   }
 
   if (result.error) {

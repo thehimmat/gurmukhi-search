@@ -6,7 +6,7 @@ import SearchBar from '@/components/SearchBar';
 import { useGurmukhiInput } from '@atthebunga/gurmukhi-input';
 import { useKeyboardLayout, KeyboardLayoutOptions } from '@/components/KeyboardLayoutSwitch';
 import { SettingsRow } from '@/components/SettingsRow';
-import { FuzzyToggle, useFuzzySetting } from '@/components/FuzzyToggle';
+import { FuzzyLevelPicker, useFuzzyLevel } from '@/components/FuzzyToggle';
 import { DEFAULT_SOURCES } from '@/lib/scriptures';
 import { fetchMeta } from '@/lib/meta';
 import ModeSelector from '@/components/ModeSelector';
@@ -116,7 +116,7 @@ function KoshSearch() {
   const [loading, setLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { layout, choose } = useKeyboardLayout();
-  const fuzzy = useFuzzySetting();
+  const fuzzy = useFuzzyLevel();
   const { onKeyDown, onPaste } = useGurmukhiInput({ value: query, onChange: setQuery, layout });
 
   useEffect(() => {
@@ -125,14 +125,14 @@ function KoshSearch() {
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/words?q=${encodeURIComponent(query.trim())}${fuzzy.on ? '&fuzzy=1' : ''}`);
+        const res = await fetch(`/api/words?q=${encodeURIComponent(query.trim())}${fuzzy.level ? `&fuzzy=${fuzzy.level}` : ''}`);
         const data = await res.json();
         setResults(data.words ?? []);
       } finally {
         setLoading(false);
       }
     }, 300);
-  }, [query, fuzzy.on]);
+  }, [query, fuzzy.level]);
 
   function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault();
@@ -180,7 +180,7 @@ function KoshSearch() {
             {
               id: 'fuzzy',
               label: 'Fuzzy',
-              content: <FuzzyToggle on={fuzzy.on} onChange={fuzzy.choose} note="Also match spelling variants (ਤ/ਟ, vowel length, final ੁ/ਿ)" />,
+              content: <FuzzyLevelPicker level={fuzzy.level} onChange={fuzzy.choose} />,
             },
             {
               id: 'keyboard',
@@ -257,8 +257,10 @@ function SearchPage() {
   const [wordFilterMode, setWordFilterMode] = useState<FilterMode>('prefix');
   const [filters, setFilters] = useState<SearchFilters>({ sources: [...DEFAULT_SOURCES] });
   const { layout, choose: chooseLayout } = useKeyboardLayout();
-  const fuzzy = useFuzzySetting();
+  const fuzzy = useFuzzyLevel();
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const fuzzyLevelRef = useRef(fuzzy.level);
+  fuzzyLevelRef.current = fuzzy.level;
   const [raags, setRaags] = useState<RaagFacet[]>([]);
   const [writers, setWriters] = useState<WriterFacet[]>([]);
   const [corpora, setCorpora] = useState<CorpusFacet[]>([]);
@@ -355,6 +357,9 @@ function SearchPage() {
       params.set('fmode', wordFilterModeRef.current);
     } else {
       params.set('q', q);
+      if (fuzzyLevelRef.current > 0 && (m === 'contains' || m === 'first_letter')) {
+        params.set('fz', String(fuzzyLevelRef.current));
+      }
       if (m === 'pattern') params.set('scope', patternScopeRef.current);
     }
 
@@ -397,7 +402,7 @@ function SearchPage() {
     const t = setTimeout(() => runSearch(query, searchMode, filtersRef.current, 0), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, searchMode, appMode]);
+  }, [query, searchMode, appMode, fuzzy.level]);
   function handleLoadMore() {
     if (state.loading) return;
     runSearch(state.committedQuery, searchMode, filters, state.page + 1);
@@ -520,7 +525,7 @@ function SearchPage() {
                 {
                   id: 'fuzzy',
                   label: 'Fuzzy',
-                  content: <FuzzyToggle on={fuzzy.on} onChange={fuzzy.choose} note="Fuzzy matching for Gurbani lines is coming; today it applies to Dictionary lookups." />,
+                  content: <FuzzyLevelPicker level={fuzzy.level} onChange={fuzzy.choose} />,
                 },
                 {
                   id: 'keyboard',
@@ -566,7 +571,7 @@ function SearchPage() {
                   <InfiniteList
                     items={state.lines}
                     getKey={line => line.id}
-                    renderItem={line => <ResultCard line={line} query={state.committedQuery} mode={searchMode} />}
+                    renderItem={line => <ResultCard line={line} query={state.committedQuery} mode={searchMode} fuzzyLevel={fuzzy.level} />}
                     hasMore={hasMore}
                     loading={state.loadingMore}
                     error={null}
