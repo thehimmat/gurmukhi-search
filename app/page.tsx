@@ -8,6 +8,7 @@ import { useKeyboardLayout, KeyboardLayoutOptions } from '@/components/KeyboardL
 import { SettingsRow } from '@/components/SettingsRow';
 import { FuzzyToggle, useFuzzySetting } from '@/components/FuzzyToggle';
 import { DEFAULT_SOURCES } from '@/lib/scriptures';
+import { fetchMeta } from '@/lib/meta';
 import ModeSelector from '@/components/ModeSelector';
 import FilterPanel from '@/components/FilterPanel';
 import { isNumericQuery } from '@/lib/numbers';
@@ -288,16 +289,13 @@ function SearchPage() {
   wordFilterModeRef.current = wordFilterMode;
 
   useEffect(() => {
-    fetch('/api/meta')
-      .then(r => r.json())
-      .then(({ raags, writers, corpora }: {
-        raags: RaagFacet[]; writers: WriterFacet[]; corpora: CorpusFacet[];
-      }) => {
+    fetchMeta()
+      .then(({ raags, writers, corpora }) => {
         setRaags(raags ?? []);
         setWriters(writers ?? []);
         setCorpora(corpora ?? []);
       })
-      .catch(() => {});
+      .catch(() => {}); // after the retry, the Filters dropdowns are left without options
   }, []);
 
 
