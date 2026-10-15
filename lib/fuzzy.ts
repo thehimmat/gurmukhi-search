@@ -18,6 +18,10 @@ export function parseFuzzyLevel(v: string | null | undefined): FuzzyLevel {
   return n === 1 || n === 2 || n === 3 ? n : 0;
 }
 
+// Loading text: High can take a second or so on common words.
+export const searchingLabel = (level: FuzzyLevel) =>
+  level === 3 ? 'Searching… may be slow' : 'Searching…';
+
 const NUKTA = '਼';
 const KANNA = 'ਾ';
 
