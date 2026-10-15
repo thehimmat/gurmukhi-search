@@ -1,21 +1,7 @@
 import type { Metadata } from "next";
-import { Crimson_Pro, Inter } from "next/font/google";
 import "./globals.css";
 import { CORPORA, SITE_NAME_EN, SITE_NAME_PA, SITE_TITLE } from "@/lib/site";
 import { SiteNav } from "@/components/SiteNav";
-
-const crimsonPro = Crimson_Pro({
-  variable: "--font-crimson-pro",
-  subsets: ["latin"],
-  weight: ["400", "600"],
-  style: ["normal", "italic"],
-});
-
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-});
 
 export const metadata: Metadata = {
   title: SITE_TITLE,
@@ -24,7 +10,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pa" className={`${crimsonPro.variable} ${inter.variable} h-full`}>
+    <html lang="pa" className="h-full">
+      {/* Every style names the families directly ("Crimson Pro", "Inter",
+          "Noto Sans Gurmukhi"), so this one stylesheet serves all three. The
+          next/font copies of Crimson Pro and Inter loaded here before were
+          never referenced: each font was downloaded twice (#38). */}
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />

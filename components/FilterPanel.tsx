@@ -1,13 +1,13 @@
 'use client';
 
-import {
+import type {
   SearchFilters,
   WriterFacet,
   RaagFacet,
   CorpusFacet,
   NumberRoleFacet,
-  activeFilterCount,
 } from '@/lib/supabase';
+import { activeFilterCount } from '@/lib/filters';
 import {
   DEFAULT_NUMBER_ROLES,
   NUMBER_ROLES,

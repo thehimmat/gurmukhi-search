@@ -1,6 +1,6 @@
 'use client';
 
-import { LineWithMeta } from '@/lib/supabase';
+import type { LineWithMeta } from '@/lib/supabase';
 import { NUMBER_ROLE_LABELS, NUMBER_ROLE_HELP, NumberRole, splitBySpans } from '@/lib/numbers';
 import { FuzzyLevel, fuzzyHighlightSpans } from '@/lib/fuzzy';
 
@@ -29,40 +29,30 @@ function HighlightedText({
   // A number result knows exactly which numerals matched, so highlight by
   // offset. Matching on the needle would mark every ੧ in the line, including
   // the verse tallies the role filter just excluded.
-  if (numeral?.spans.length) {
-    return (
-      <>
-        {splitBySpans(text, numeral.spans).map((part, i) =>
-          part.marked
-            ? <mark key={i} className="bg-[#f5d98e] rounded-sm">{part.text}</mark>
-            : <span key={i}>{part.text}</span>,
-        )}
-      </>
-    );
-  }
-  if (mode !== 'contains' || !needle) {
-    return <span>{text}</span>;
-  }
+  if (numeral?.spans.length) return <Marked text={text} spans={numeral.spans} />;
+  if (mode !== 'contains' || !needle) return <span>{text}</span>;
   // A fuzzy match is a spelling variant of the needle, so find it the way the
   // search did (folded), then mark that stretch of the original line.
-  if (fuzzyLevel > 0) {
-    return (
-      <>
-        {splitBySpans(text, fuzzyHighlightSpans(text, needle, fuzzyLevel)).map((part, i) =>
-          part.marked
-            ? <mark key={i} className="bg-[#f5d98e] rounded-sm">{part.text}</mark>
-            : <span key={i}>{part.text}</span>,
-        )}
-      </>
-    );
+  if (fuzzyLevel > 0) return <Marked text={text} spans={fuzzyHighlightSpans(text, needle, fuzzyLevel)} />;
+  return <Marked text={text} spans={exactSpans(text, needle)} />;
+}
+
+// Every occurrence of `needle` in `text`, as offsets.
+function exactSpans(text: string, needle: string): { start: number; end: number }[] {
+  const spans = [];
+  for (let i = text.indexOf(needle); i !== -1; i = text.indexOf(needle, i + needle.length)) {
+    spans.push({ start: i, end: i + needle.length });
   }
-  const parts = text.split(new RegExp(`(${needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'g'));
+  return spans;
+}
+
+function Marked({ text, spans }: { text: string; spans: { start: number; end: number }[] }) {
   return (
     <>
-      {parts.map((part, i) =>
-        part === needle
-          ? <mark key={i} className="bg-[#f5d98e] rounded-sm">{part}</mark>
-          : <span key={i}>{part}</span>
+      {splitBySpans(text, spans).map((part, i) =>
+        part.marked
+          ? <mark key={i} className="bg-[#f5d98e] rounded-sm">{part.text}</mark>
+          : <span key={i}>{part.text}</span>,
       )}
     </>
   );

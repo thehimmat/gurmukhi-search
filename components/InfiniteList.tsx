@@ -39,11 +39,21 @@ export function InfiniteList<T>({
 }: Props<T>) {
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
+  // Distance from the top of the document, which the window virtualizer
+  // measures from. Re-measured when the page's layout changes (a panel opening
+  // above the list resizes the body), not on every render: reading layout
+  // forces the browser to compute it (#39).
   useIsoLayoutEffect(() => {
-    // Distance from the top of the document, which the window virtualizer measures from.
-    const el = listRef.current;
-    if (el) setScrollMargin(el.getBoundingClientRect().top + window.scrollY);
-  });
+    const measure = () => {
+      const el = listRef.current;
+      if (el) setScrollMargin(el.getBoundingClientRect().top + window.scrollY);
+    };
+    measure();
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    ro?.observe(document.body);
+    window.addEventListener('resize', measure);
+    return () => { ro?.disconnect(); window.removeEventListener('resize', measure); };
+  }, []);
 
   const virtualizer = useWindowVirtualizer({
     count: items.length,

@@ -8,13 +8,17 @@ import {
   searchNumbers,
   WordViewOptions,
   PAGE_SIZE,
+  type SearchResult,
 } from '@/lib/search';
+import { cachedFirstPage, firstPageKey } from '@/lib/first-page-cache';
 import { isNumericQuery, parseNumericQuery } from '@/lib/numbers';
 import { parseFuzzyLevel } from '@/lib/fuzzy';
 import { SearchFilters } from '@/lib/supabase';
 import { LetterSetQuery, ExtraMode, Scope, VowelMode, WordSort, FilterMode } from '@/lib/letterset';
 
 export const runtime = 'nodejs';
+
+class SearchFailed extends Error {}
 
 // Parse the structured Letter Set query out of the request params.
 function parseLetterSet(sp: URLSearchParams): LetterSetQuery {
@@ -79,23 +83,36 @@ export async function GET(req: NextRequest) {
     filterMode: (sp.get('fmode') as FilterMode) ?? undefined,
   };
 
-  let result;
-  if (mode === 'letterset') {
-    result = await searchLetterSet(parseLetterSet(sp), filters, page, view);
-  } else if (mode === 'first_letter') {
-    result = await searchFirstLetters(query, filters, page, fuzzy);
-  } else if (mode === 'pattern') {
-    result = await searchPattern(query, filters, page, scope);
-  } else {
-    if (!query.trim()) {
-      return NextResponse.json({ lines: [], total: 0, page, pageSize: PAGE_SIZE });
-    }
+  if (mode !== 'letterset' && mode !== 'first_letter' && mode !== 'pattern' && !query.trim()) {
+    return NextResponse.json({ lines: [], total: 0, page, pageSize: PAGE_SIZE });
+  }
+
+  const run = async (): Promise<SearchResult> => {
+    if (mode === 'letterset') return searchLetterSet(parseLetterSet(sp), filters, page, view);
+    if (mode === 'first_letter') return searchFirstLetters(query, filters, page, fuzzy);
+    if (mode === 'pattern') return searchPattern(query, filters, page, scope);
     // A bare number is a question about where it appears and in what capacity,
     // which a substring match cannot answer: ੧ occurs in ~7,200 verse tallies.
     const value = isNumericQuery(query) ? parseNumericQuery(query) : null;
-    result = value !== null
-      ? await searchNumbers(value, filters, page)
-      : await searchContains(query, filters, page, false, fuzzy);
+    return value !== null
+      ? searchNumbers(value, filters, page)
+      : searchContains(query, filters, page, fuzzy);
+  };
+
+  // Page 0 is shared across regions (lib/first-page-cache.ts); an error is
+  // thrown out of the cached function so it is never kept.
+  let result: SearchResult;
+  try {
+    result = page === 0
+      ? await cachedFirstPage(firstPageKey(sp), async () => {
+          const r = await run();
+          if (r.error) throw new SearchFailed(r.error);
+          return r;
+        })
+      : await run();
+  } catch (e) {
+    if (!(e instanceof SearchFailed)) throw e;
+    result = { lines: [], total: 0, error: e.message };
   }
 
   if (result.error) {

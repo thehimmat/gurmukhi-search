@@ -1,6 +1,6 @@
 'use client';
 
-import { Word } from '@/lib/supabase';
+import type { Word } from '@/lib/supabase';
 
 // Renders word-scope search results: each matching dictionary word with its
 // occurrence count, linking to its kosh entry.

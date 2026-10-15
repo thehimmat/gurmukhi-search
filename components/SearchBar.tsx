@@ -37,7 +37,8 @@ export default function SearchBar({ value, onChange, onSubmit, mode, placeholder
   }
 
   const hints: Record<typeof mode, string> = {
-    contains:     'Type Gurmukhi, or type phonetically — no Gurmukhi keyboard needed',
+    // Short enough not to clip on a 390px phone (#39).
+    contains:     'Type Gurmukhi or phonetically',
     first_letter: 'Type first letter of each word — p n k → ਪ ਨ ਕ',
     pattern:      'Use _ (any char), * (any sequence), {nasal}, {bilabial}, etc.',
     letterset:    'Build a set of letters below',
