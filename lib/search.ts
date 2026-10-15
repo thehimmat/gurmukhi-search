@@ -172,6 +172,9 @@ export async function searchContains(
     .order('corpus_rank', { ascending: true })
     .order('ang', { ascending: true })
     .order('line_no', { ascending: true })
+    // line_no repeats (one printed line holds several verses), so ties need a
+    // deterministic order or offset pages can repeat or skip lines (#46).
+    .order('verse_id', { ascending: true })
     .range(offset, offset + PAGE_SIZE);
   dataQ = applyFilters(dataQ, filters);
 

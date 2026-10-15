@@ -18,3 +18,12 @@ describe('ResultCard highlighting', () => {
     expect(html).not.toContain('<mark');
   });
 });
+
+describe('ResultCard viewer link', () => {
+  it('opens the line in its shabad, marked', () => {
+    const html = renderToStaticMarkup(
+      <ResultCard line={{ id: 4321, verse_id: 4321, shabad_id: 1, ang: 3, line_no: 1, gurmukhi: 'ਸੋਚੈ ਸੋਚਿ', translation_en: null, transliteration_en: null, shabads: null }} query="ਸੋਚਿ" mode="contains" />,
+    );
+    expect(html).toContain('href="/line/4321#line-4321"');
+  });
+});

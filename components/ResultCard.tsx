@@ -3,6 +3,7 @@
 import type { LineWithMeta } from '@/lib/supabase';
 import { NUMBER_ROLE_LABELS, NUMBER_ROLE_HELP, NumberRole, splitBySpans } from '@/lib/numbers';
 import { FuzzyLevel, fuzzyHighlightSpans } from '@/lib/fuzzy';
+import { lineHref } from '@/lib/viewer';
 
 type Props = {
   line: LineWithMeta;
@@ -62,7 +63,12 @@ export default function ResultCard({ line, query, mode, fuzzyLevel = 0 }: Props)
   const shabad = line.shabads;
 
   return (
-    <div className="border border-[#ddd0be] rounded-lg bg-[#fdf9f3] p-4 hover:border-[#c8b89a] transition-colors">
+    // The whole card opens the line in its shabad (the kosh viewer).
+    <a
+      href={lineHref(line.id)}
+      className="block border border-[#ddd0be] rounded-lg bg-[#fdf9f3] p-4 hover:border-[#c8b89a] hover:bg-[#fbf4e8] transition-colors no-underline"
+      style={{ textDecoration: 'none' }}
+    >
       {/* Gurmukhi text */}
       <p
         className="text-2xl leading-relaxed text-[#1a1008] mb-2"
@@ -119,6 +125,6 @@ export default function ResultCard({ line, query, mode, fuzzyLevel = 0 }: Props)
           </span>
         )}
       </div>
-    </div>
+    </a>
   );
 }

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { leadLineIndex, type FeedLine, type ShabadGroup } from '@/lib/feed';
 import { SOURCE_IDS, SOURCE_NAMES } from '@/lib/scriptures';
+import { lineHref } from '@/lib/viewer';
 
 // One shabad (or, for Sri Sarbloh Granth, one ang) from the reading feed:
 // where it is, then its opening line, like a search result. The rest of the
@@ -48,12 +49,13 @@ export function ShabadCard({ group }: { group: ShabadGroup }) {
   );
 }
 
+// A line opens in its shabad in the viewer (gurmukhi-kosh#146).
 function Line({ line }: { line: FeedLine }) {
   return (
     <div>
-      <p className="text-xl leading-relaxed text-[#1a1008]" style={{ fontFamily: '"Noto Sans Gurmukhi", serif' }}>
+      <a href={lineHref(line.id)} className="block text-xl leading-relaxed text-[#1a1008] hover:text-[#8b5e3c]" style={{ fontFamily: '"Noto Sans Gurmukhi", serif', textDecoration: 'none' }}>
         {line.gurmukhi}
-      </p>
+      </a>
       {line.translation_en && (
         <p className="text-sm text-[#5c3d1e]" style={{ fontFamily: '"Crimson Pro", serif' }}>{line.translation_en}</p>
       )}

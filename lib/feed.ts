@@ -3,8 +3,14 @@
 //
 // Both page with a keyset cursor, never an offset, so page 3,000 costs the
 // same as page 1: the cursor names the last row returned and each query reads
-// forward from it along an index — lines_corpus_rank_ang (kosh 031) for lines,
-// words_frequency_rank (kosh 046) for words.
+// forward from it along an index — lines_corpus_rank_verse (kosh 054) for
+// lines, words_frequency_rank (kosh 046) for words.
+//
+// Lines page in (corpus_rank, verse_id) order, not (corpus_rank, ang,
+// line_no): line_no is the printed line, which holds several verses, so a
+// cursor on it skipped the opening verses of a shabad that began on the line
+// the previous page ended on (#46). verse_id is unique per scripture and in
+// reading order in every one.
 
 import type { LineWithMeta, Word } from './supabase';
 
@@ -14,7 +20,7 @@ export type FeedLine = LineWithMeta & { corpus_rank: number; source_fk: number }
 
 // ─── Cursors ─────────────────────────────────────────────────────────────────
 
-export type LineCursor = { rank: number; ang: number; line: number };
+export type LineCursor = { rank: number; verse: number };
 export type WordCursor = { frequency: number; id: number };
 
 const nonNegInts = (s: string | null | undefined, n: number): number[] | null => {
@@ -23,10 +29,10 @@ const nonNegInts = (s: string | null | undefined, n: number): number[] | null =>
   return parts.map(Number);
 };
 
-export const encodeLineCursor = (c: LineCursor) => `${c.rank}.${c.ang}.${c.line}`;
+export const encodeLineCursor = (c: LineCursor) => `${c.rank}.${c.verse}`;
 export function decodeLineCursor(s: string | null | undefined): LineCursor | null {
-  const v = nonNegInts(s, 3);
-  return v && { rank: v[0], ang: v[1], line: v[2] };
+  const v = nonNegInts(s, 2);
+  return v && { rank: v[0], verse: v[1] };
 }
 
 export const encodeWordCursor = (c: WordCursor) => `${c.frequency}.${c.id}`;
@@ -67,7 +73,7 @@ export function takeShabads(lines: FeedLine[], n: number, batchFull: boolean) {
   const last = groups.at(-1)?.lines.at(-1);
   return {
     groups,
-    cursor: last ? { rank: last.corpus_rank, ang: last.ang, line: last.line_no } : null,
+    cursor: last ? { rank: last.corpus_rank, verse: last.verse_id } : null,
     done: !batchFull && groups.length === all,
   };
 }
@@ -112,10 +118,9 @@ type Db = { from: (table: string) => any };
 export const LINE_SELECT =
   '*, shabads(raag_english, raag_gurmukhi, writer_english, writer_id, ang_start)';
 
-// Lines after `after`, in reading order, from the selected scriptures. A
-// keyset over three columns as one OR would defeat the index, so it's three
-// forward reads, each a range on lines_corpus_rank_ang: the rest of the
-// cursor's ang, the rest of its scripture, then the scriptures after it.
+// Lines after `after`, in reading order, from the selected scriptures: the
+// rest of the cursor's scripture, then the scriptures after it, each a range
+// on lines_corpus_rank_verse.
 async function linesAfter(db: Db, sources: number[] | undefined, after: LineCursor | null, limit: number) {
   const base = () => {
     let q = db.from('lines').select(LINE_SELECT);
@@ -124,14 +129,12 @@ async function linesAfter(db: Db, sources: number[] | undefined, after: LineCurs
   };
   const ordered = (q: any, n: number) =>
     q.order('corpus_rank', { ascending: true })
-      .order('ang', { ascending: true })
-      .order('line_no', { ascending: true })
+      .order('verse_id', { ascending: true })
       .limit(n);
 
   const steps = after
     ? [
-        () => base().eq('corpus_rank', after.rank).eq('ang', after.ang).gt('line_no', after.line),
-        () => base().eq('corpus_rank', after.rank).gt('ang', after.ang),
+        () => base().eq('corpus_rank', after.rank).gt('verse_id', after.verse),
         () => base().gt('corpus_rank', after.rank),
       ]
     : [() => base()];
@@ -163,7 +166,7 @@ export async function shabadPage(db: Db, sources: number[] | undefined, after: L
       return { shabads: page.groups, next: page.done || !page.cursor ? null : encodeLineCursor(page.cursor) };
     }
     const last = batch[batch.length - 1];
-    cursor = { rank: last.corpus_rank, ang: last.ang, line: last.line_no };
+    cursor = { rank: last.corpus_rank, verse: last.verse_id };
   }
   return { shabads: [], next: null }; // unreachable: the last batch always returns
 }

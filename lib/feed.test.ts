@@ -8,11 +8,12 @@ const line = (id: number, shabad: number | null, ang = 1, rank = 0, source = 1):
 
 describe('line cursor', () => {
   it('round-trips', () => {
-    const c = { rank: 10, ang: 42, line: 7 };
+    const c = { rank: 10, verse: 4207 };
     expect(decodeLineCursor(encodeLineCursor(c))).toEqual(c);
   });
   it('rejects junk', () => {
-    for (const s of [null, '', '1.2', 'a.b.c', '1.2.3.4', '-1.2.3']) expect(decodeLineCursor(s)).toBeNull();
+    // 1.2.3 is the pre-#46 (rank.ang.line) form, which no longer resolves.
+    for (const s of [null, '', '1', 'a.b', '1.2.3', '-1.2']) expect(decodeLineCursor(s)).toBeNull();
   });
 });
 
@@ -29,7 +30,7 @@ describe('takeShabads', () => {
   it('cuts at a shabad boundary and points the cursor at the last line taken', () => {
     const r = takeShabads(lines, 2, false);
     expect(r.groups.map(g => g.lines.map(l => l.id))).toEqual([[1, 2], [3]]);
-    expect(r.cursor).toEqual({ rank: 0, ang: 1, line: 3 });
+    expect(r.cursor).toEqual({ rank: 0, verse: 3 });
     expect(r.done).toBe(false);
   });
 
@@ -48,7 +49,7 @@ describe('takeShabads', () => {
   it('returns part of a shabad longer than a whole batch rather than nothing', () => {
     const r = takeShabads([line(1, 9), line(2, 9)], 20, true);
     expect(r.groups.map(g => g.lines.length)).toEqual([2]);
-    expect(r.cursor?.line).toBe(2);
+    expect(r.cursor?.verse).toBe(2);
   });
 
   it('groups lines without a shabad (Sarbloh) by ang', () => {
