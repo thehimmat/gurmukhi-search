@@ -7,9 +7,20 @@ type Row = Record<string, unknown>;
 type Pred = (r: Row) => boolean;
 
 export type QueryLog = { table: string; head: boolean; filters: string[]; limit?: number };
+export type RpcLog = { fn: string; args: Record<string, unknown> };
+type RpcHandler = (args: Record<string, unknown>) => unknown[];
 
-export function fakeSupabase(tables: Record<string, Row[]>) {
+export function fakeSupabase(tables: Record<string, Row[]>, rpcs: Record<string, RpcHandler> = {}) {
   const log: QueryLog[] = [];
+  const rpcLog: RpcLog[] = [];
+
+  function rpc(fn: string, args: Record<string, unknown>) {
+    rpcLog.push({ fn, args });
+    const handler = rpcs[fn];
+    return Promise.resolve(handler
+      ? { data: handler(args), error: null }
+      : { data: null, error: { message: `no fake for rpc ${fn}` } });
+  }
 
   function from(table: string) {
     const preds: Pred[] = [];
@@ -56,5 +67,5 @@ export function fakeSupabase(tables: Record<string, Row[]>) {
     return b;
   }
 
-  return { client: { from }, log };
+  return { client: { from, rpc }, log, rpcLog };
 }
