@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fuzzyFold, fuzzyHighlightSpans, parseFuzzyLevel, FUZZY_LEVELS } from './fuzzy';
+import { fuzzyFold, fuzzyHighlightSpans, parseFuzzyLevel, FUZZY_LEVELS, searchingLabel } from './fuzzy';
 
 // The same vectors kosh migration 047 asserts for fuzzy_fold() in SQL, so the
 // highlighter folds exactly as the search does.
@@ -59,5 +59,13 @@ describe('fuzzy levels', () => {
     expect(parseFuzzyLevel('2')).toBe(2);
     expect(parseFuzzyLevel(null)).toBe(0);
     expect(parseFuzzyLevel('9')).toBe(0);
+  });
+});
+
+describe('searchingLabel', () => {
+  it('adds a short slow note only at High', () => {
+    expect(searchingLabel(0)).toBe('Searching…');
+    expect(searchingLabel(2)).toBe('Searching…');
+    expect(searchingLabel(3)).toBe('Searching… may be slow');
   });
 });

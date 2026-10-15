@@ -9,6 +9,7 @@ import { SettingsRow } from '@/components/SettingsRow';
 import { FuzzyLevelPicker, useFuzzyLevel } from '@/components/FuzzyToggle';
 import { DEFAULT_SOURCES } from '@/lib/scriptures';
 import { fetchMeta } from '@/lib/meta';
+import { searchingLabel } from '@/lib/fuzzy';
 import ModeSelector from '@/components/ModeSelector';
 import FilterPanel from '@/components/FilterPanel';
 import { isNumericQuery } from '@/lib/numbers';
@@ -193,7 +194,7 @@ function KoshSearch() {
 
       {loading && (
         <p style={{ color: 'var(--text-secondary)', fontFamily: '"Inter", sans-serif', fontSize: '0.875rem', padding: '0.5rem 0.25rem' }}>
-          Searching…
+          {searchingLabel(fuzzy.level)}
         </p>
       )}
 
@@ -544,7 +545,7 @@ function SearchPage() {
                     ? <span>Showing <strong>{showed}</strong> result{showed !== 1 ? 's' : ''}{hasMore ? '+' : ''}</span>
                     : <span>Showing <strong>{showed}</strong> of <strong>{total.toLocaleString()}</strong> result{total !== 1 ? 's' : ''}</span>
                 )}
-                {state.loading && <span style={{ color: 'var(--accent)' }} className="animate-pulse">Searching…</span>}
+                {state.loading && <span style={{ color: 'var(--accent)' }} className="animate-pulse">{searchingLabel(searchMode === 'contains' || searchMode === 'first_letter' ? fuzzy.level : 0)}</span>}
               </div>
             )}
 
