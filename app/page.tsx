@@ -21,6 +21,8 @@ import WordList from '@/components/WordList';
 import WordResultControls from '@/components/WordResultControls';
 import { ShabadFeed, WordFeed } from '@/components/Feeds';
 import { InfiniteList } from '@/components/InfiniteList';
+import { NoResults, ResultCount } from '@/components/ResultStatus';
+import { fetchWords, type WordHit } from '@/lib/words-client';
 import {
   SearchFilters,
   LineWithMeta,
@@ -113,26 +115,38 @@ function KoshSearch() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<(Word & { match?: 'fold' })[]>([]);
+  const [results, setResults] = useState<WordHit[]>([]);
   const [loading, setLoading] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  // The query the shown results answer, so "no results" waits for the lookup
+  // of what's typed now rather than showing during the debounce.
+  const [settled, setSettled] = useState('');
   const { layout, choose } = useKeyboardLayout();
   const fuzzy = useFuzzyLevel();
   const { onKeyDown, onPaste } = useGurmukhiInput({ value: query, onChange: setQuery, layout });
 
+  // Each keystroke cancels the previous lookup (pending or in flight), so a
+  // slow earlier response can't land over a newer one.
   useEffect(() => {
-    if (!query.trim()) { setResults([]); return; }
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
+    const q = query.trim();
+    if (!q) { setResults([]); setSettled(''); setError(null); setLoading(false); return; }
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/words?q=${encodeURIComponent(query.trim())}${fuzzy.level ? `&fuzzy=${fuzzy.level}` : ''}`);
-        const data = await res.json();
-        setResults(data.words ?? []);
+        const words = await fetchWords(q, fuzzy.level, ctrl.signal);
+        setResults(words);
+        setError(null);
+        setSettled(q);
+      } catch (e) {
+        if ((e as Error).name === 'AbortError') return;
+        setError((e as Error).message);
+        setSettled(q);
       } finally {
-        setLoading(false);
+        if (!ctrl.signal.aborted) setLoading(false);
       }
     }, 300);
+    return () => { clearTimeout(t); ctrl.abort(); };
   }, [query, fuzzy.level]);
 
   function handleSubmit(e: React.SyntheticEvent) {
@@ -227,10 +241,14 @@ function KoshSearch() {
         </ul>
       )}
 
-      {!loading && query && results.length === 0 && (
-        <p style={{ color: 'var(--text-secondary)', fontFamily: '"Inter", sans-serif', fontSize: '0.9rem', padding: '1rem 0.25rem' }}>
-          No words found for &ldquo;{query}&rdquo;
+      {error && !loading && (
+        <p role="alert" style={{ color: '#dc2626', fontFamily: '"Inter", sans-serif', fontSize: '0.875rem', padding: '0.5rem 0.25rem' }}>
+          {error}
         </p>
+      )}
+
+      {!loading && !error && settled && settled === query.trim() && results.length === 0 && (
+        <NoResults query={settled} />
       )}
 
       {!query && (
@@ -377,14 +395,16 @@ function SearchPage() {
         loading: false,
         loadingMore: false,
         error: null,
-        total: json.total,
+        // Totals and role counts come with the first page only (kosh 052);
+        // later pages keep the ones already shown.
+        total: page === 0 ? json.total : (json.total ?? s.total),
         hasMore: json.hasMore ?? false,
         page,
         committedQuery: isLetterSet ? 'letterset' : q,
         lines: page === 0 ? (json.lines ?? []) : [...s.lines, ...(json.lines ?? [])],
         words: page === 0 ? (json.words ?? []) : [...s.words, ...(json.words ?? [])],
         // Absent on a non-number search, which is what clears the checkboxes.
-        numberRoles: json.numberRoles ?? null,
+        numberRoles: page === 0 ? (json.numberRoles ?? null) : s.numberRoles,
       }));
     } catch (e) {
       if ((e as Error).name !== 'AbortError') {
@@ -540,11 +560,7 @@ function SearchPage() {
           <div style={{ maxWidth: '860px', margin: '0 auto', padding: '0.5rem 1.5rem 3rem' }}>
             {(hasResults || state.loading) && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', fontSize: '0.875rem', color: 'var(--text-secondary)', fontFamily: '"Inter", sans-serif' }}>
-                {hasResults && (
-                  total === null
-                    ? <span>Showing <strong>{showed}</strong> result{showed !== 1 ? 's' : ''}{hasMore ? '+' : ''}</span>
-                    : <span>Showing <strong>{showed}</strong> of <strong>{total.toLocaleString()}</strong> result{total !== 1 ? 's' : ''}</span>
-                )}
+                {hasResults && <ResultCount showed={showed} total={total} hasMore={hasMore} />}
                 {state.loading && <span style={{ color: 'var(--accent)' }} className="animate-pulse">{searchingLabel(searchMode === 'contains' || searchMode === 'first_letter' ? fuzzy.level : 0)}</span>}
               </div>
             )}
@@ -581,14 +597,9 @@ function SearchPage() {
                 )}
 
             {!state.loading && state.committedQuery && !hasResults && !state.error && (
-              <div style={{ textAlign: 'center', padding: '4rem 0', color: 'var(--text-secondary)' }}>
-                <p className="gurmukhi" style={{ fontSize: '2rem', marginBottom: '0.75rem', opacity: 0.4 }}>ਕੁਝ ਨਹੀਂ ਮਿਲਿਆ</p>
-                <p style={{ fontFamily: '"Inter", sans-serif', fontSize: '0.875rem' }}>
-                  {searchMode === 'letterset'
-                    ? 'No words match this letter set'
-                    : <>No results for &ldquo;{state.committedQuery}&rdquo;</>}
-                </p>
-              </div>
+              searchMode === 'letterset'
+                ? <NoResults message="No words match this letter set" />
+                : <NoResults query={state.committedQuery} />
             )}
 
             {/* Line results load the next page as you scroll (InfiniteList).

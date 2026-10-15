@@ -11,13 +11,27 @@ const line = (id: number, extra = {}) => ({
 });
 
 describe('ShabadCard', () => {
-  it('shows the shabad header once and every line in order', () => {
-    const g: ShabadGroup = { key: 's1', lines: [line(1), line(2)] };
+  it('shows the header and only the first line, with a way to show the rest', () => {
+    const g: ShabadGroup = { key: 's1', lines: [line(1, { gurmukhi: 'ਸੋਚੈ ਸੋਚਿ ਨ ਹੋਵਈ ਜੇ ਸੋਚੀ ਲਖ ਵਾਰ ॥' }), line(2)] };
     const html = renderToStaticMarkup(<ShabadCard group={g} />);
     expect(html.match(/Guru Nanak Dev Ji/g)).toHaveLength(1);
-    expect(html.indexOf('ਪੰਗਤੀ 1')).toBeLessThan(html.indexOf('ਪੰਗਤੀ 2'));
-    expect(html).toMatch(/Ang<\/span> 2/);
+    expect(html).toContain('ਸੋਚੈ ਸੋਚਿ ਨ ਹੋਵਈ');
     expect(html).toContain('Line 1');
+    expect(html).not.toContain('ਪੰਗਤੀ 2');
+    expect(html).toMatch(/Show all 2 lines/);
+    expect(html).toMatch(/Ang<\/span> 2/);
+  });
+
+  it('leads with the first verse line, past a heading', () => {
+    const g: ShabadGroup = { key: 's1', lines: [line(1, { gurmukhi: 'ਸਲੋਕੁ ॥' }), line(2, { gurmukhi: 'ਪਵਣੁ ਗੁਰੂ ਪਾਣੀ ਪਿਤਾ ਮਾਤਾ ਧਰਤਿ ਮਹਤੁ ॥' })] };
+    const html = renderToStaticMarkup(<ShabadCard group={g} />);
+    expect(html).toContain('ਪਵਣੁ ਗੁਰੂ');
+    expect(html).not.toContain('ਸਲੋਕੁ');
+  });
+
+  it('offers no toggle for a one-line shabad', () => {
+    const g: ShabadGroup = { key: 's1', lines: [line(1, { gurmukhi: 'ਸੋਚੈ ਸੋਚਿ ਨ ਹੋਵਈ ਜੇ ਸੋਚੀ ਲਖ ਵਾਰ ॥' })] };
+    expect(renderToStaticMarkup(<ShabadCard group={g} />)).not.toMatch(/Show all/);
   });
 
   it('names the scripture outside SGGS', () => {

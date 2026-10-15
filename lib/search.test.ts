@@ -12,19 +12,25 @@ const { searchContains } = await import('./search');
 beforeEach(() => { db.log.length = 0; });
 
 describe('searchContains', () => {
-  it('skips the full-table exact count and reports hasMore instead', async () => {
+  it('counts every match on the first page, in parallel with the rows', async () => {
     const r = await searchContains('ਸਤਿ', {}, 0);
-    expect(db.log.some(q => q.head)).toBe(false);
-    expect(r.total).toBeNull();
+    expect(db.log.filter(q => q.head)).toHaveLength(1);
+    expect(r.total).toBe(12);
     expect(r.lines).toHaveLength(12);
     expect(r.hasMore).toBe(false);
+  });
+
+  it('leaves the count to page 0 on later pages', async () => {
+    const r = await searchContains('ੴ', {}, 1);
+    expect(db.log.some(q => q.head)).toBe(false);
+    expect(r.total).toBeNull();
   });
 
   it('pages by one extra row', async () => {
     const first = await searchContains('ੴ', {}, 0); // all 25 lines match
     expect(first.lines).toHaveLength(20);
     expect(first.hasMore).toBe(true);
-    expect(db.log.at(-1)?.limit).toBe(21);
+    expect(db.log.find(q => !q.head)?.limit).toBe(21);
     const second = await searchContains('ੴ', {}, 1);
     expect(second.lines.map(l => l.id)).toEqual([21, 22, 23, 24, 25]);
     expect(second.hasMore).toBe(false);

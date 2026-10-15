@@ -25,6 +25,7 @@ import {
 } from './letterset';
 import { getWordIndex } from './word-index';
 import type { FuzzyLevel } from './fuzzy';
+import { escapeLike } from './like';
 
 // View options for word-scope Letter Set results (ordering + in-result filter).
 export type WordViewOptions = {
@@ -167,15 +168,18 @@ export async function searchContains(
   if (asRegex) return searchByRegex(searchText, filters, page);
   if (fuzzy > 0) return searchContainsFuzzy(searchText, filters, page, fuzzy);
 
-  // No exact total: counting every match read the whole table (0.7-4 s) on
-  // each search. One extra row says whether another page exists instead.
-  // `like`, not `ilike`: Gurmukhi has no case, and both use the trigram index
-  // (kosh 046), but like skips the case-folding work.
+  // The exact total is counted on the first page only, alongside the rows:
+  // since kosh 046's trigram index it costs tens of milliseconds, and later
+  // pages keep the total they already have. A count that fails (or times out)
+  // just leaves the total unknown; the extra row still says whether another
+  // page exists. `like`, not `ilike`: Gurmukhi has no case, and both use the
+  // trigram index, but like skips the case-folding work.
   const offset = page * PAGE_SIZE;
+  const pattern = `%${escapeLike(searchText)}%`;
   let dataQ = supabase
     .from('lines')
     .select(needsShabadJoin(filters) ? LINE_SELECT_INNER : LINE_SELECT)
-    .like('gurmukhi', `%${searchText}%`)
+    .like('gurmukhi', pattern)
     // Corpus first (kosh 031/046 reading order), then reading order within it:
     // (ang, line_no) alone interleaves the corpora.
     .order('corpus_rank', { ascending: true })
@@ -184,32 +188,63 @@ export async function searchContains(
     .range(offset, offset + PAGE_SIZE);
   dataQ = applyFilters(dataQ, filters);
 
-  const { data, error } = await dataQ;
+  const countQ = page === 0
+    ? applyFilters(
+        supabase
+          .from('lines')
+          .select(needsShabadJoin(filters) ? 'id, shabads!inner(raag_english)' : 'id', { count: 'exact', head: true })
+          .like('gurmukhi', pattern),
+        filters,
+      )
+    : null;
+
+  const [{ data, error }, counted] = await Promise.all([dataQ, countQ]);
   if (error) return { lines: [], total: 0, error: error.message };
 
   const rows = (data ?? []) as LineWithMeta[];
-  return { lines: rows.slice(0, PAGE_SIZE), total: null, hasMore: rows.length > PAGE_SIZE };
+  const total = counted && !counted.error && typeof counted.count === 'number' ? counted.count : null;
+  return { lines: rows.slice(0, PAGE_SIZE), total, hasMore: rows.length > PAGE_SIZE };
 }
+
+// Above this many matches a fuzzy count stops and the total reads "20+":
+// counting a near-everything High query in full can pass the anon timeout.
+const FUZZY_COUNT_CAP = 10000;
 
 // Fuzzy Contains (kosh 047): the database folds the line and the query at
 // this level, and for High also lets one letter be anything. Same paging as
-// above: one extra row instead of a count.
+// above: one extra row, plus a count on the first page.
 async function searchContainsFuzzy(
   searchText: string,
   filters: SearchFilters,
   page: number,
   level: FuzzyLevel,
 ): Promise<SearchResult> {
-  const { data, error } = await supabase.rpc('search_lines_fuzzy', {
-    p_query: searchText,
-    p_level: level,
-    ...rpcFilterArgs(filters),
-    p_limit: PAGE_SIZE + 1,
-    p_offset: page * PAGE_SIZE,
-  });
+  const [{ data, error }, counted] = await Promise.all([
+    supabase.rpc('search_lines_fuzzy', {
+      p_query: searchText,
+      p_level: level,
+      ...rpcFilterArgs(filters),
+      p_limit: PAGE_SIZE + 1,
+      p_offset: page * PAGE_SIZE,
+    }),
+    // The total, on the first page only (kosh 052), as for exact Contains.
+    page === 0
+      ? supabase.rpc('count_lines_fuzzy', {
+          p_query: searchText,
+          p_level: level,
+          ...rpcFilterArgs(filters),
+          p_cap: FUZZY_COUNT_CAP,
+        })
+      : null,
+  ]);
   if (error) return { lines: [], total: 0, error: error.message };
   const rows = (data ?? []) as FlatLineRow[];
-  return { lines: rows.slice(0, PAGE_SIZE).map(mapFlatLineRow), total: null, hasMore: rows.length > PAGE_SIZE };
+  const n = counted && !counted.error ? Number(Array.isArray(counted.data) ? counted.data[0] : counted.data) : NaN;
+  return {
+    lines: rows.slice(0, PAGE_SIZE).map(mapFlatLineRow),
+    total: Number.isFinite(n) && n < FUZZY_COUNT_CAP ? n : null,
+    hasMore: rows.length > PAGE_SIZE,
+  };
 }
 
 // ─── Mode 1b: Regex search (via RPC) ─────────────────────────────────────────
@@ -389,9 +424,11 @@ export async function listCorpora(): Promise<CorpusFacet[]> {
 // list_number_roles, so search holds no copy of the classifier that assigns
 // them — see lib/numbers.ts.
 
-export async function listNumberRoles(value: number): Promise<NumberRoleFacet[]> {
-  const { data, error } = await supabase.rpc('list_number_roles', { p_value: value });
-  if (error) throw new Error(`list_number_roles: ${error.message}`);
+// Per-role line counts for one number, scoped to the same facets as the
+// results (kosh 052), so the checkboxes agree with what's listed.
+export async function listNumberRoles(value: number, filters: SearchFilters = {}): Promise<NumberRoleFacet[]> {
+  const { data, error } = await supabase.rpc('count_number_roles', { p_value: value, ...rpcFilterArgs(filters) });
+  if (error) throw new Error(`count_number_roles: ${error.message}`);
   return ((data ?? []) as Array<{ role: string; line_count: number }>)
     .map((r) => ({ role: r.role, lineCount: Number(r.line_count) }));
 }
@@ -407,11 +444,15 @@ export async function searchNumbers(
   // keeps the RPC's own "empty means all" contract intact for other callers.
   const roles = filters.numberRoles ?? DEFAULT_NUMBER_ROLES;
 
+  // The counts label the checkboxes and don't change from page to page, so
+  // they're fetched with the first page only. Losing them must not lose the
+  // results, so a failure degrades to unlabelled boxes rather than an error.
+  const roleCounts = page === 0 ? listNumberRoles(value, filters).catch(() => undefined) : Promise.resolve(undefined);
+
   // An empty selection is the user unchecking every box. That means "show
   // nothing", so it must not fall through to the RPC's "empty means all".
   if (roles.length === 0) {
-    const numberRoles = await listNumberRoles(value).catch(() => undefined);
-    return { lines: [], total: 0, numberRoles };
+    return { lines: [], total: 0, numberRoles: await roleCounts };
   }
 
   const [rows, numberRoles] = await Promise.all([
@@ -422,9 +463,7 @@ export async function searchNumbers(
       p_limit: PAGE_SIZE,
       p_offset: offset,
     }),
-    // The counts label the checkboxes; losing them must not lose the results,
-    // so a facet failure degrades to unlabelled boxes rather than an error.
-    listNumberRoles(value).catch(() => undefined),
+    roleCounts,
   ]);
 
   if (rows.error) return { lines: [], total: 0, error: rows.error.message };

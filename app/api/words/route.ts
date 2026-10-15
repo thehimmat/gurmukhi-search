@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { CDN_CACHE } from '@/lib/cache';
 import { parseFuzzyLevel } from '@/lib/fuzzy';
+import { escapeLike } from '@/lib/like';
 
 type WordHit = { id: number; gurmukhi: string; frequency: number; match?: 'fold' };
 
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get('q')?.trim() ?? '';
-  const limit = Math.min(parseInt(req.nextUrl.searchParams.get('limit') ?? '20'), 50);
+  const limit = Math.min(Math.max(1, parseInt(req.nextUrl.searchParams.get('limit') ?? '20', 10) || 20), 50);
   const fuzzy = parseFuzzyLevel(req.nextUrl.searchParams.get('fuzzy'));
 
   if (!q) return NextResponse.json({ words: [] }, { headers: { 'Cache-Control': CDN_CACHE } });
@@ -22,25 +23,23 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ words }, { headers: { 'Cache-Control': CDN_CACHE } });
   }
 
-  // Exact prefix match first
-  const { data, error } = await supabase
+  // Prefix match first, then substring. Corpus words only, as the feeds and
+  // the fuzzy path list them; `like`, not `ilike` (Gurmukhi has no case); and
+  // the user's % and _ are text, not wildcards.
+  const q_ = escapeLike(q);
+  const lookup = (pattern: string) => supabase
     .from('words')
     .select('id, gurmukhi, frequency')
-    .ilike('gurmukhi', `${q}%`)
+    .eq('in_corpus', true)
+    .like('gurmukhi', pattern)
     .order('frequency', { ascending: false })
     .limit(limit);
 
+  const { data, error } = await lookup(`${q_}%`);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Fallback: substring match
   if (!data || data.length === 0) {
-    const { data: substring, error: substringErr } = await supabase
-      .from('words')
-      .select('id, gurmukhi, frequency')
-      .ilike('gurmukhi', `%${q}%`)
-      .order('frequency', { ascending: false })
-      .limit(limit);
-
+    const { data: substring, error: substringErr } = await lookup(`%${q_}%`);
     if (substringErr) return NextResponse.json({ error: substringErr.message }, { status: 500 });
     return NextResponse.json({ words: substring ?? [] }, { headers: { 'Cache-Control': CDN_CACHE } });
   }

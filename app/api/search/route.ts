@@ -44,7 +44,9 @@ export async function GET(req: NextRequest) {
 
   const mode = sp.get('mode') ?? 'contains'; // contains | first_letter | pattern | letterset
   const query = sp.get('q') ?? '';
-  const page = Math.max(0, parseInt(sp.get('page') ?? '0', 10));
+  // A malformed page (page=abc) reads as the first page: NaN here used to come
+  // back as page: null with an empty result, cached at the CDN for a day.
+  const page = Math.max(0, parseInt(sp.get('page') ?? '0', 10) || 0);
   const scope: Scope = sp.get('scope') === 'word' ? 'word' : 'line';
   const fuzzy = parseFuzzyLevel(sp.get('fz'));
 
