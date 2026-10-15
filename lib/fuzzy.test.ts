@@ -42,6 +42,13 @@ describe('fuzzyHighlightSpans', () => {
     expect(marked('ਧਰਮ ਕਰਮ', 'ਕਰਮ', 3)).toEqual(['ਧਰਮ', 'ਕਰਮ']);
     expect(marked('ਧਰਮ ਕਰਮ', 'ਕਰਮ', 2)).toEqual(['ਕਰਮ']);
   });
+
+  it('High swaps a letter for a letter, never for a space or vowel sign', () => {
+    // Live preview bug: the wildcard matched the space in "ਪਾਵ ਗੁਰੂ".
+    expect(marked('ਹਮ ਮਲਿ ਧੋਵਹ ਪਾਵ ਗੁਰੂ ਕੇ', 'ਵਾਹਗੁਰੂ', 3)).toEqual([]);
+    expect(marked('ਸੇਵਕ ਵਾਹਗੁਰੂ ਤੇਰਾ', 'ਵਾਹਗੁਰੂ', 3)).toEqual(['ਵਾਹਗੁਰੂ']);
+    expect(marked('ਕਰਿ ਕਰਮ', 'ਕਰਮ', 3)).toEqual(['ਕਰਮ']);
+  });
 });
 
 describe('fuzzy levels', () => {

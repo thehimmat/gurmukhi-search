@@ -52,6 +52,10 @@ export function fuzzyFold(s: string, level: FuzzyLevel): string {
 // Vowel signs and other marks that attach to the letter before them.
 const COMBINING = /[ਁ-ਃ਼-ੑੰੱੵ]/;
 
+// A base letter (consonant or independent vowel) after folding.
+const LETTER_CLASS = '[\u0A05-\u0A39\u0A72\u0A73]';
+const LETTER = new RegExp(`^${LETTER_CLASS}$`);
+
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // Where the query matches the line under this fuzzy level, as offsets into
@@ -73,9 +77,13 @@ export function fuzzyHighlightSpans(text: string, query: string, level: FuzzyLev
     offset += cp.length;
   }
 
+  // High: any one letter may be wrong. Only letter positions are wildcarded,
+  // and only by a letter, so the wildcard never stands in for a space or a
+  // vowel sign (kosh 048 builds the same alternation in SQL).
   const chars = Array.from(q);
-  const alternatives = level === 3 && chars.length >= 3
-    ? chars.map((_, i) => chars.map((c, j) => (i === j ? '[^\\s]' : escapeRe(c))).join(''))
+  const letterAt = chars.flatMap((c, i) => (LETTER.test(c) ? [i] : []));
+  const alternatives = level === 3 && letterAt.length >= 3
+    ? letterAt.map(i => chars.map((c, j) => (i === j ? LETTER_CLASS : escapeRe(c))).join(''))
     : [escapeRe(q)];
   const re = new RegExp(alternatives.join('|'), 'g');
 
