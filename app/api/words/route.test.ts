@@ -46,3 +46,10 @@ describe('/api/words fuzzy', () => {
     ]);
   });
 });
+
+describe('/api/words caching', () => {
+  it('is cacheable at the CDN', async () => {
+    const res = await GET(new NextRequest('http://x/api/words?q=ਸਭ'));
+    expect(res.headers.get('cache-control')).toMatch(/s-maxage=\d+/);
+  });
+});

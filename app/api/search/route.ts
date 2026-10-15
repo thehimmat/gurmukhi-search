@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { CDN_CACHE, NO_STORE } from '@/lib/cache';
 import {
   searchContains,
   searchFirstLetters,
@@ -94,7 +95,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (result.error) {
-    return NextResponse.json({ error: result.error }, { status: 400 });
+    return NextResponse.json({ error: result.error }, { status: 400, headers: { 'Cache-Control': NO_STORE } });
   }
 
   return NextResponse.json({
@@ -105,5 +106,5 @@ export async function GET(req: NextRequest) {
     numberRoles: result.numberRoles ?? null,
     page,
     pageSize: PAGE_SIZE,
-  });
+  }, { headers: { 'Cache-Control': CDN_CACHE } });
 }

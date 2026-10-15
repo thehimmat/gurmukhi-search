@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { foldGurmukhi } from '@/lib/gurmukhi-fold';
+import { CDN_CACHE } from '@/lib/cache';
 
 type WordHit = { id: number; gurmukhi: string; frequency: number; match?: 'fold' };
 
@@ -9,7 +10,7 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(parseInt(req.nextUrl.searchParams.get('limit') ?? '20'), 50);
   const fuzzy = req.nextUrl.searchParams.get('fuzzy') === '1';
 
-  if (!q) return NextResponse.json({ words: [] });
+  if (!q) return NextResponse.json({ words: [] }, { headers: { 'Cache-Control': CDN_CACHE } });
 
   // Exact prefix match first
   const { data, error } = await supabase
@@ -52,8 +53,8 @@ export async function GET(req: NextRequest) {
       .limit(limit);
 
     if (substringErr) return NextResponse.json({ error: substringErr.message }, { status: 500 });
-    return NextResponse.json({ words: substring ?? [] });
+    return NextResponse.json({ words: substring ?? [] }, { headers: { 'Cache-Control': CDN_CACHE } });
   }
 
-  return NextResponse.json({ words: hits });
+  return NextResponse.json({ words: hits }, { headers: { 'Cache-Control': CDN_CACHE } });
 }
