@@ -15,6 +15,8 @@ const nextConfig: NextConfig = {
       "/word/:path*",
       "/browse",
       "/ang/:path*",
+      // The Gurbani viewer: a line in its shabad (gurmukhi-kosh#146).
+      "/line/:path*",
       "/about",
       // /about subpages (e.g. /about/mahan-kosh-key, the ਸੰਕੇਤ reference)
       // are kosh-zone pages too; ":path*" does not match the bare /about,

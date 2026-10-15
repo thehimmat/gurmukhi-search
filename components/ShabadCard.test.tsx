@@ -39,3 +39,10 @@ describe('ShabadCard', () => {
     expect(renderToStaticMarkup(<ShabadCard group={g} />)).toContain('Dasam Bani');
   });
 });
+
+describe('ShabadCard viewer link', () => {
+  it('opens the lead line in its shabad', () => {
+    const g: ShabadGroup = { key: 's1', lines: [line(1, { gurmukhi: 'ਸਲੋਕੁ ॥' }), line(2, { gurmukhi: 'ਪਵਣੁ ਗੁਰੂ ਪਾਣੀ ਪਿਤਾ ਮਾਤਾ ਧਰਤਿ ਮਹਤੁ ॥' })] };
+    expect(renderToStaticMarkup(<ShabadCard group={g} />)).toContain('href="/line/2#line-2"');
+  });
+});
