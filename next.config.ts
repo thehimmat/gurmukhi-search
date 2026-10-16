@@ -25,6 +25,8 @@ const nextConfig: NextConfig = {
       "/health",
       "/admin/:path*",
       "/api/word/:path*",
+      // The line viewer's context as JSON (the santhya transcriber's lookup aside).
+      "/api/line/:path*",
       "/api/flags",
       "/api/health",
       // The kosh zone's JS/CSS/fonts are namespaced under this prefix
