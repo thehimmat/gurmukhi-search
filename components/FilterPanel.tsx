@@ -15,7 +15,7 @@ import {
   NumberRole,
 } from '@/lib/numbers';
 import MultiSelect, { Option } from './MultiSelect';
-import { DEFAULT_SOURCES } from '@/lib/scriptures';
+import { useSources } from './SourcesContext';
 
 type Props = {
   filters: SearchFilters;
@@ -55,7 +55,8 @@ export default function FilterPanel({
   facets = 'lines',
 }: Props) {
   const lineFacets = facets === 'lines';
-  const count = activeFilterCount(filters);
+  const { defaults } = useSources();
+  const count = activeFilterCount(filters, defaults);
 
   // Counts may not have arrived yet (first keystroke) — the boxes still render,
   // just without a number beside them, so the filter never pops in late.
@@ -179,7 +180,7 @@ export default function FilterPanel({
 
       {count > 0 && (
         <button
-          onClick={() => onChange({ sources: [...DEFAULT_SOURCES], ...(showNumberRoles ? { numberRoles: undefined } : {}) })}
+          onClick={() => onChange({ sources: [...defaults], ...(showNumberRoles ? { numberRoles: undefined } : {}) })}
           className="mt-2 text-xs text-[#8b5e3c] hover:underline"
         >
           Reset filters
