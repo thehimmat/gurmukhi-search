@@ -45,10 +45,10 @@ describe('fuzzy Contains', () => {
     expect(r.hasMore).toBe(true);
   });
 
-  it('stays on the exact substring query when fuzzy is off', async () => {
+  it('stays on the exact substring search when fuzzy is off', async () => {
     await searchContains('ਸਤਿਗੁਰ', {}, 0, 0);
-    expect(db.rpcLog).toHaveLength(0);
-    expect(db.log[0].filters).toContain('gurmukhi like %ਸਤਿਗੁਰ%');
+    expect(db.rpcLog.map(c => c.fn)).not.toContain('search_lines_fuzzy');
+    expect(db.rpcLog[0]).toMatchObject({ fn: 'search_lines_contains', args: { p_query: 'ਸਤਿਗੁਰ' } });
   });
 });
 

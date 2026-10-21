@@ -4,6 +4,7 @@ import type { LineWithMeta } from '@/lib/supabase';
 import { NUMBER_ROLE_LABELS, NUMBER_ROLE_HELP, NumberRole, splitBySpans } from '@/lib/numbers';
 import { FuzzyLevel, fuzzyHighlightSpans } from '@/lib/fuzzy';
 import { lineHref } from '@/lib/viewer';
+import { containsSpans } from '@/lib/contains';
 
 type Props = {
   line: LineWithMeta;
@@ -35,16 +36,7 @@ function HighlightedText({
   // A fuzzy match is a spelling variant of the needle, so find it the way the
   // search did (folded), then mark that stretch of the original line.
   if (fuzzyLevel > 0) return <Marked text={text} spans={fuzzyHighlightSpans(text, needle, fuzzyLevel)} />;
-  return <Marked text={text} spans={exactSpans(text, needle)} />;
-}
-
-// Every occurrence of `needle` in `text`, as offsets.
-function exactSpans(text: string, needle: string): { start: number; end: number }[] {
-  const spans = [];
-  for (let i = text.indexOf(needle); i !== -1; i = text.indexOf(needle, i + needle.length)) {
-    spans.push({ start: i, end: i + needle.length });
-  }
-  return spans;
+  return <Marked text={text} spans={containsSpans(text, needle)} />;
 }
 
 function Marked({ text, spans }: { text: string; spans: { start: number; end: number }[] }) {
