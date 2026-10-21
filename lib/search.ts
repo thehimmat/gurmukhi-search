@@ -25,8 +25,6 @@ import {
 } from './letterset';
 import { getWordIndex } from './word-index';
 import type { FuzzyLevel } from './fuzzy';
-import { escapeLike } from './like';
-import { LINE_SELECT } from './feed';
 
 // View options for word-scope Letter Set results (ordering + in-result filter).
 export type WordViewOptions = {
@@ -105,35 +103,6 @@ function mapFlatLineRow(r: FlatLineRow): LineWithMeta {
   };
 }
 
-// Apply shared filters to a Supabase query builder.
-// `q` must already be selecting from `lines` with a `shabads` join.
-function applyFilters<T>(
-  q: T,
-  filters: SearchFilters,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): any {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query = q as any;
-  // Multi-select facets: several values mean "any of these", so `in` not `eq`.
-  if (filters.raags?.length)   query = query.in('shabads.raag_english', filters.raags);
-  if (filters.writers?.length) query = query.in('shabads.writer_english', filters.writers);
-  if (filters.sources?.length) query = query.in('source_fk', filters.sources);
-  if (filters.angMin != null) query = query.gte('ang', filters.angMin);
-  if (filters.angMax != null) query = query.lte('ang', filters.angMax);
-  return query;
-}
-
-// A raag or writer filter must exclude lines whose shabad does not match, so the
-// embed has to be an inner join; without such a filter it stays a left join,
-// which keeps lines that carry no shabad metadata at all. The two selects are
-// spelled out as literals because supabase-js types the response off the string.
-function needsShabadJoin(filters: SearchFilters): boolean {
-  return !!(filters.raags?.length || filters.writers?.length);
-}
-
-const LINE_SELECT_INNER =
-  '*, shabads!inner(raag_english, raag_gurmukhi, writer_english, writer_id, ang_start)';
-
 // The line-search RPCs take the same facets as arrays; null means unfiltered.
 function rpcFilterArgs(filters: SearchFilters) {
   return {
@@ -146,7 +115,10 @@ function rpcFilterArgs(filters: SearchFilters) {
 }
 
 // ─── Mode 1: Contains ─────────────────────────────────────────────────────────
-// Literal substring search on lines.gurmukhi.
+// Literal substring search (kosh 066). The database compares the line and the
+// query in canonical (NFD) form, so a nukta letter matches whether it is stored
+// ready-made (ਸ਼) or as letter + ਼, a lone ਼ finds every nukta letter, and a
+// query of only marks (੍, "੍ ") skips the trigram index it can't use.
 export async function searchContains(
   searchText: string,
   filters: SearchFilters = {},
@@ -155,45 +127,30 @@ export async function searchContains(
 ): Promise<SearchResult> {
   if (fuzzy > 0) return searchContainsFuzzy(searchText, filters, page, fuzzy);
 
-  // The exact total is counted on the first page only, alongside the rows:
-  // since kosh 046's trigram index it costs tens of milliseconds, and later
-  // pages keep the total they already have. A count that fails (or times out)
-  // just leaves the total unknown; the extra row still says whether another
-  // page exists. `like`, not `ilike`: Gurmukhi has no case, and both use the
-  // trigram index, but like skips the case-folding work.
-  const offset = page * PAGE_SIZE;
-  const pattern = `%${escapeLike(searchText)}%`;
-  let dataQ = supabase
-    .from('lines')
-    .select(needsShabadJoin(filters) ? LINE_SELECT_INNER : LINE_SELECT)
-    .like('gurmukhi', pattern)
-    // Corpus first (kosh 031/046 reading order), then reading order within it:
-    // (ang, line_no) alone interleaves the corpora.
-    .order('corpus_rank', { ascending: true })
-    .order('ang', { ascending: true })
-    .order('line_no', { ascending: true })
-    // line_no repeats (one printed line holds several verses), so ties need a
-    // deterministic order or offset pages can repeat or skip lines (#46).
-    .order('verse_id', { ascending: true })
-    .range(offset, offset + PAGE_SIZE);
-  dataQ = applyFilters(dataQ, filters);
-
-  const countQ = page === 0
-    ? applyFilters(
-        supabase
-          .from('lines')
-          .select(needsShabadJoin(filters) ? 'id, shabads!inner(raag_english)' : 'id', { count: 'exact', head: true })
-          .like('gurmukhi', pattern),
-        filters,
-      )
-    : null;
-
-  const [{ data, error }, counted] = await Promise.all([dataQ, countQ]);
+  // The exact total is counted on the first page only, alongside the rows;
+  // later pages keep the total they already have. A count that fails (or
+  // times out) just leaves the total unknown; the extra row still says
+  // whether another page exists.
+  const [{ data, error }, counted] = await Promise.all([
+    supabase.rpc('search_lines_contains', {
+      p_query: searchText,
+      ...rpcFilterArgs(filters),
+      p_limit: PAGE_SIZE + 1,
+      p_offset: page * PAGE_SIZE,
+    }),
+    page === 0
+      ? supabase.rpc('count_lines_contains', { p_query: searchText, ...rpcFilterArgs(filters) })
+      : null,
+  ]);
   if (error) return { lines: [], total: 0, error: error.message };
 
-  const rows = (data ?? []) as LineWithMeta[];
-  const total = counted && !counted.error && typeof counted.count === 'number' ? counted.count : null;
-  return { lines: rows.slice(0, PAGE_SIZE), total, hasMore: rows.length > PAGE_SIZE };
+  const rows = (data ?? []) as FlatLineRow[];
+  const n = counted && !counted.error ? Number(Array.isArray(counted.data) ? counted.data[0] : counted.data) : NaN;
+  return {
+    lines: rows.slice(0, PAGE_SIZE).map(mapFlatLineRow),
+    total: Number.isFinite(n) ? n : null,
+    hasMore: rows.length > PAGE_SIZE,
+  };
 }
 
 // Above this many matches a fuzzy count stops and the total reads "20+":
