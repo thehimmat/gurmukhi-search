@@ -399,7 +399,7 @@ export async function listWriters(): Promise<WriterFacet[]> {
     }));
 }
 
-// Scriptures, in reading order (SGGS, Dasam Bani, Bhai Gurdas Ji Vaaran).
+// Scriptures, in reading order (kosh sources.rank).
 export async function listCorpora(): Promise<CorpusFacet[]> {
   const { data, error } = await supabase.rpc('list_corpora');
   if (error) throw new Error(`list_corpora: ${error.message}`);

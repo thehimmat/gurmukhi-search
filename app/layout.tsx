@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { CORPORA, SITE_NAME_EN, SITE_NAME_PA, SITE_TITLE } from "@/lib/site";
+import { SITE_NAME_EN, SITE_NAME_PA, SITE_TITLE } from "@/lib/site";
+import { getSources } from "@/lib/sources-server";
 import { SiteNav } from "@/components/SiteNav";
 
 export const metadata: Metadata = {
@@ -8,7 +9,9 @@ export const metadata: Metadata = {
   description: "Search Sri Guru Granth Sahib Ji by line or look up individual words in the Gurmukhi dictionary.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // The texts indexed, from kosh's sources table, in reading order.
+  const sources = await getSources();
   return (
     <html lang="pa" className="h-full">
       {/* Every style names the families directly ("Crimson Pro", "Inter",
@@ -41,7 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main className="flex-1">{children}</main>
 
         <footer style={{ borderTop: "1px solid var(--border)", padding: "1.5rem", textAlign: "center", color: "var(--text-secondary)", fontSize: "0.875rem", fontFamily: '"Inter", sans-serif' }}>
-          <p>{CORPORA.join(" · ")}</p>
+          <p>{sources.map((s) => s.name).join(" · ")}</p>
           <p style={{ marginTop: "0.5rem" }}>
             <a href="/about" style={{ color: "var(--accent)", textDecoration: "none" }}>Sources &amp; licensing</a>
             {" · "}

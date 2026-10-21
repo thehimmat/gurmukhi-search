@@ -22,11 +22,3 @@ export function activeNavHref(pathname: string): string | null {
   if (pathname.startsWith('/about')) return '/about';
   return null;
 }
-
-/** The texts the dictionary indexes, as named in kosh's `sources` table. */
-export const CORPORA = [
-  'Sri Guru Granth Sahib Ji',
-  'Bhai Gurdas Ji Vaaran',
-  'Dasam Bani',
-  'Sri Sarbloh Granth',
-] as const;

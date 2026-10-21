@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { leadLineIndex, type FeedLine, type ShabadGroup } from '@/lib/feed';
-import { SOURCE_IDS, SOURCE_NAMES } from '@/lib/scriptures';
+import { sourceById } from '@/lib/sources';
+import { useSources } from './SourcesContext';
 import { lineHref } from '@/lib/viewer';
 
 // One shabad (or, for Sri Sarbloh Granth, one ang) from the reading feed:
@@ -12,16 +13,18 @@ export function ShabadCard({ group }: { group: ShabadGroup }) {
   const [expanded, setExpanded] = useState(false);
   const first = group.lines[0];
   const shabad = first.shabads;
-  const sggs = first.source_fk === SOURCE_IDS.sggs;
+  const source = sourceById(useSources().sources, first.source_fk);
+  const sggs = source?.slug === 'sggs';
+  const unit = source?.pageUnit ?? 'Ang';
   const shown = expanded ? group.lines : [group.lines[leadLineIndex(group.lines)]];
 
   return (
     <article className="rounded-lg border border-[#ddd0be] bg-[#fdf9f3] p-4">
       <header className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#7a6045]">
-        {!sggs && <span className="font-medium">{SOURCE_NAMES[first.source_fk] ?? 'Gurbani'}</span>}
+        {!sggs && <span className="font-medium">{source?.name ?? 'Gurbani'}</span>}
         {sggs
           ? <a href={`/ang/${first.ang}`} className="hover:underline"><span className="font-medium">Ang</span> {first.ang}</a>
-          : <span><span className="font-medium">Ang</span> {first.ang}</span>}
+          : <span><span className="font-medium">{unit}</span> {first.ang}</span>}
         {shabad?.raag_english && (
           <span>
             <span style={{ fontFamily: '"Noto Sans Gurmukhi", serif' }}>{shabad.raag_gurmukhi}</span> ({shabad.raag_english})

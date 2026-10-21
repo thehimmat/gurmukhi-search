@@ -2,15 +2,15 @@
 // Supabase client on import: a client component importing a value from there
 // shipped all of @supabase/supabase-js to the browser (#38).
 import type { SearchFilters } from './supabase';
-import { isDefaultSources } from './scriptures';
+import { isDefaultSources } from './sources';
 
-export function activeFilterCount(f: SearchFilters): number {
+export function activeFilterCount(f: SearchFilters, defaultSources: number[]): number {
   return (
     (f.raags?.length ? 1 : 0) +
     (f.writers?.length ? 1 : 0) +
     // The default scriptures are not "narrowing"; any other choice is,
     // including clearing to all scriptures.
-    (isDefaultSources(f.sources) ? 0 : 1) +
+    (isDefaultSources(f.sources, defaultSources) ? 0 : 1) +
     (f.angMin != null ? 1 : 0) +
     (f.angMax != null ? 1 : 0)
   );

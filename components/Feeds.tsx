@@ -7,7 +7,7 @@ import { mergeGroups, type ShabadGroup } from '@/lib/feed';
 import type { Word } from '@/lib/supabase';
 
 // Gurbani view before a search: every shabad of the selected scriptures, in
-// reading order (SGGS, Dasam, Sarbloh, Bhai Gurdas), 20 at a time.
+// reading order (kosh sources.rank), 20 at a time.
 export function ShabadFeed({ sources }: { sources?: number[] }) {
   const qs = new URLSearchParams();
   [...(sources ?? [])].sort((a, b) => a - b).forEach(s => qs.append('source', String(s)));

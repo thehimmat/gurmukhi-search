@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { CORPORA, NAV_LINKS, SITE_NAME_EN, SITE_NAME_PA, SITE_TITLE, activeNavHref } from './site';
+import { NAV_LINKS, SITE_NAME_EN, SITE_NAME_PA, SITE_TITLE, activeNavHref } from './site';
 
 // #133 (gurmukhi-kosh): the site is ਗੁਰਬਾਣੀ ਖੋਜ ਕੋਸ਼ / Gurbani Search Dictionary.
 describe('site name', () => {
@@ -30,9 +30,5 @@ describe('site nav (gurmukhi-kosh#127)', () => {
   it('marks the search page as Search', () => {
     expect(activeNavHref('/')).toBe('/');
     expect(activeNavHref('/something-else')).toBeNull();
-  });
-
-  it('lists every indexed text for the footer', () => {
-    expect(CORPORA).toEqual(['Sri Guru Granth Sahib Ji', 'Bhai Gurdas Ji Vaaran', 'Dasam Bani', 'Sri Sarbloh Granth']);
   });
 });
