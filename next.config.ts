@@ -4,11 +4,16 @@ import type { NextConfig } from "next";
 // search UI (/ plus /api/search, /api/words, /api/meta); every dictionary path
 // below is transparently served by the gurmukhi-kosh deployment (the deep
 // dictionary: provenance, flagging, health, admin). Swapping the dictionary
-// implementation = changing KOSH_ZONE_URL; see ../APP_INTERACTIONS.md.
-const KOSH_ZONE_URL = process.env.KOSH_ZONE_URL ?? "https://gurmukhi-kosh.vercel.app";
+// implementation = changing KOSH_ZONE_URL; see ../APP_INTERACTIONS.md. Rewrites are fixed at build
+// time: the VM image is built with http://kosh:3000, the kosh container on the same Docker network
+// (Dockerfile; gurmukhi-kosh selfhost/docker-compose.apps.yml).
+const KOSH_ZONE_URL = process.env.KOSH_ZONE_URL || "https://gurmukhi-kosh.vercel.app";
 
 const nextConfig: NextConfig = {
   transpilePackages: ['@atthebunga/gurmukhi-input'],
+
+  // The VM runs this as a Docker image (Dockerfile). Vercel ignores the setting.
+  output: "standalone",
 
   async rewrites() {
     const koshPaths = [
