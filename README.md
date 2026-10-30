@@ -1,4 +1,4 @@
-# ਗੁਰਬਾਣੀ ਖੋਜ ਕੋਸ਼ — Gurbani Search Dictionary
+# ਗੁਰਬਾਣੀ ਖੋਜ — Gurbani Search
 
 The search shell for [search.atthebunga.com](https://search.atthebunga.com) (repo name: `gurmukhi-search`); dictionary pages come from `gurmukhi-kosh`.
 
