@@ -1,0 +1,89 @@
+name: Deploy
+
+# On every push to main: typecheck and test, build the shell's arm64 image, push it to GHCR, and
+# deploy it on the VM next to the kosh app (gurmukhi-kosh selfhost/README.md, "The apps"). A new
+# image ends with a Cloudflare purge of the site, since cached pages name the old build's /_next
+# chunks, which the new image doesn't have. Pull requests run the checks only.
+#
+# Deploying is turned on by the repository variable DEPLOY_HOST (ubuntu@141.148.39.45) and the
+# secrets DEPLOY_SSH_KEY and DEPLOY_KNOWN_HOSTS; the purge by CLOUDFLARE_ZONE_ID and
+# CLOUDFLARE_API_TOKEN.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --no-audit --no-fund
+      - run: npx tsc --noEmit
+      - run: npm test
+
+  image:
+    needs: check
+    if: ${{ vars.DEPLOY_HOST != '' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:${{ github.sha }}
+          build-args: |
+            NEXT_PUBLIC_SUPABASE_URL=${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CF_ZONE: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+    steps:
+      - name: Deploy on the VM
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          HOST: ${{ vars.DEPLOY_HOST }}
+        run: |
+          install -m 700 -d ~/.ssh
+          (umask 077 && printf '%s\n' "$KEY" > ~/.ssh/id_ed25519)
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -o BatchMode=yes "$HOST" search
+      - name: Purge the site from Cloudflare's cache
+        if: ${{ env.CF_ZONE != '' }}
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          curl -fsS -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE/purge_cache" \
+            -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+            --data '{"hosts":["search.atthebunga.com"]}' -o /dev/null -w "purge: %{http_code}\n"
