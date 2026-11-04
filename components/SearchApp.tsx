@@ -50,6 +50,8 @@ type SearchState = {
   lines: LineWithMeta[];
   words: Word[];
   total: number | null; // null = unknown total (line scope); use hasMore instead
+  // The total is a lower bound (the count stopped at its cap); use hasMore.
+  totalCapped: boolean;
   hasMore: boolean; // used when total is null
   page: number;
   loading: boolean;
@@ -338,6 +340,7 @@ function SearchPage() {
     lines: [],
     words: [],
     total: 0,
+    totalCapped: false,
     hasMore: false,
     page: 0,
     loading: false,
@@ -458,6 +461,7 @@ function SearchPage() {
         // Totals and role counts come with the first page only (kosh 052);
         // later pages keep the ones already shown.
         total: page === 0 ? json.total : (json.total ?? s.total),
+        totalCapped: page === 0 ? !!json.totalCapped : s.totalCapped,
         hasMore: json.hasMore ?? false,
         page,
         committedQuery: isLetterSet ? 'letterset' : q,
@@ -550,7 +554,7 @@ function SearchPage() {
   const hasResults = items.length > 0;
   const showed     = items.length;
   const total      = state.total;
-  const hasMore    = total === null ? state.hasMore : showed < total;
+  const hasMore    = total === null || state.totalCapped ? state.hasMore : showed < total;
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100%' }}>
@@ -645,7 +649,7 @@ function SearchPage() {
           <div style={{ maxWidth: '860px', margin: '0 auto', padding: '0.5rem 1.5rem 3rem' }}>
             {(hasResults || state.loading) && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', fontSize: '0.875rem', color: 'var(--text-secondary)', fontFamily: '"Inter", sans-serif' }}>
-                {hasResults && <ResultCount showed={showed} total={total} hasMore={hasMore} />}
+                {hasResults && <ResultCount showed={showed} total={total} capped={state.totalCapped} hasMore={hasMore} />}
                 {state.loading && <span style={{ color: 'var(--accent)' }} className="animate-pulse">{searchingLabel(searchMode === 'contains' || searchMode === 'first_letter' ? fuzzy.level : 0)}</span>}
               </div>
             )}

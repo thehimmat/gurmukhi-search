@@ -2,9 +2,13 @@
 
 const plural = (n: number) => (n === 1 ? 'result' : 'results');
 
-export function ResultCount({ showed, total, hasMore }: { showed: number; total: number | null; hasMore: boolean }) {
+export function ResultCount({ showed, total, hasMore, capped = false }: {
+  showed: number; total: number | null; hasMore: boolean;
+  // The count stopped at its cap, so `total` is a lower bound.
+  capped?: boolean;
+}) {
   if (total !== null) {
-    return <span>Showing <strong>{showed}</strong> of <strong>{total.toLocaleString('en-US')}</strong> {plural(total)}</span>;
+    return <span>Showing <strong>{showed}</strong> of <strong>{total.toLocaleString('en-US')}{capped ? '+' : ''}</strong> {plural(total)}</span>;
   }
   // No exact total (the count failed or hit its cap): say there are more.
   return <span>Showing <strong>{showed}{hasMore ? '+' : ''}</strong> {plural(hasMore ? 2 : showed)}</span>;

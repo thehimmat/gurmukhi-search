@@ -40,6 +40,8 @@ export type SearchResult = {
   lines: LineWithMeta[];
   words?: Word[];
   total: number | null; // null = unknown (line scope skips an expensive exact count)
+  // The count stopped at its cap: `total` is a lower bound ("1,000+").
+  totalCapped?: boolean;
   hasMore?: boolean; // used when total is null, to drive the "Load more" button
   // Per-role counts for a number query, so the role checkboxes can be labelled
   // and a role with no hits disabled. Travels with the result because it is
@@ -118,6 +120,11 @@ function rpcFilterArgs(filters: SearchFilters) {
   };
 }
 
+// Exact Contains totals stop here. A full count of a broad query (ਹਰਿ matches
+// 8,824 lines) visits most of the table; run cold beside the page query, the
+// two together passed the anon timeout (#50). Capped, the count stops early.
+export const CONTAINS_COUNT_CAP = 1000;
+
 // ─── Mode 1: Contains ─────────────────────────────────────────────────────────
 // Literal substring search (kosh 066). The database compares the line and the
 // query in canonical (NFD) form, so a nukta letter matches whether it is stored
@@ -143,7 +150,7 @@ export async function searchContains(
       p_offset: page * PAGE_SIZE,
     }),
     page === 0
-      ? supabase.rpc('count_lines_contains', { p_query: searchText, ...rpcFilterArgs(filters) })
+      ? supabase.rpc('count_lines_contains', { p_query: searchText, ...rpcFilterArgs(filters), p_cap: CONTAINS_COUNT_CAP })
       : null,
   ]);
   if (error) return { lines: [], total: 0, dbError: error };
@@ -153,6 +160,7 @@ export async function searchContains(
   return {
     lines: rows.slice(0, PAGE_SIZE).map(mapFlatLineRow),
     total: Number.isFinite(n) ? n : null,
+    totalCapped: Number.isFinite(n) && n >= CONTAINS_COUNT_CAP,
     hasMore: rows.length > PAGE_SIZE,
   };
 }

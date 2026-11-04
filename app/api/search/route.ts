@@ -137,6 +137,7 @@ export async function GET(req: NextRequest) {
     lines: result.lines,
     words: result.words ?? null,
     total: result.total,
+    totalCapped: result.totalCapped ?? false,
     hasMore: result.hasMore ?? null,
     numberRoles: result.numberRoles ?? null,
     page,

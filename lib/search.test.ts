@@ -13,7 +13,7 @@ const db = fakeSupabase({ lines: [] }, {
   count_lines_contains: () => [25] as unknown[],
 });
 vi.mock('./supabase', async (orig) => ({ ...(await orig<object>()), supabase: db.client }));
-const { searchContains } = await import('./search');
+const { searchContains, CONTAINS_COUNT_CAP } = await import('./search');
 
 beforeEach(() => { db.log.length = 0; db.rpcLog.length = 0; });
 
@@ -54,5 +54,28 @@ describe('searchContains', () => {
   it('reshapes the flat rows for the line components', async () => {
     const r = await searchContains('ੴ', {}, 1);
     expect(r.lines[0]).toMatchObject({ id: 21, gurmukhi: 'g21', shabads: null });
+  });
+
+  // A full count of a broad query (ਹਰਿ: 8,824 lines) scans most of the table
+  // and, cold, passed the anon timeout alongside the page itself (#50).
+  it('caps the count so a broad query never scans the whole table', async () => {
+    await searchContains('ਹਰਿ', {}, 0);
+    expect(db.rpcLog.find(c => c.fn === 'count_lines_contains')?.args).toMatchObject({ p_cap: CONTAINS_COUNT_CAP });
+    expect(CONTAINS_COUNT_CAP).toBe(1000);
+  });
+
+  it('marks a total that reached the cap as a lower bound', async () => {
+    const rpc = db.client.rpc;
+    const spy = vi.spyOn(db.client, 'rpc').mockImplementation(((fn: string, args: Record<string, unknown>) =>
+      fn === 'count_lines_contains' ? Promise.resolve({ data: CONTAINS_COUNT_CAP, error: null }) : rpc(fn, args)) as never);
+    const r = await searchContains('ਹਰਿ', {}, 0);
+    expect(r).toMatchObject({ total: CONTAINS_COUNT_CAP, totalCapped: true });
+    spy.mockRestore();
+  });
+
+  it('gives an exact total below the cap', async () => {
+    const r = await searchContains('ਸਤਿ', {}, 0);
+    expect(r.total).toBe(25);
+    expect(r.totalCapped).toBeFalsy();
   });
 });
