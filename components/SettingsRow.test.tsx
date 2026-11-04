@@ -30,3 +30,18 @@ describe('SettingsRow', () => {
     expect(html).not.toContain('keyboard-body');
   });
 });
+
+describe('SettingsRow accessibility', () => {
+  it('ties the open toggle to its panel', () => {
+    const html = renderToStaticMarkup(<SettingsRow items={items} defaultOpen="fuzzy" />);
+    const controls = html.match(/aria-expanded="true"[^>]*aria-controls="([^"]+)"|aria-controls="([^"]+)"[^>]*aria-expanded="true"/);
+    const id = controls?.[1] ?? controls?.[2];
+    expect(id).toBeTruthy();
+    expect(html).toMatch(new RegExp(`<div id="${id}"[^>]*><p>fuzzy-body`));
+  });
+
+  it('reads the badge as a count of active filters', () => {
+    const html = renderToStaticMarkup(<SettingsRow items={items} />);
+    expect(html).toMatch(/>2<span class="sr-only"> active<\/span>/);
+  });
+});

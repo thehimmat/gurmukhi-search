@@ -1,5 +1,7 @@
 // The line above a result list, and what shows when a search finds nothing.
 
+import type { ReactNode } from 'react';
+
 const plural = (n: number) => (n === 1 ? 'result' : 'results');
 
 export function ResultCount({ showed, total, hasMore, capped = false }: {
@@ -20,4 +22,11 @@ export function NoResults({ query, message }: { query?: string; message?: string
       {message ?? <>No results for &ldquo;{query}&rdquo;</>}
     </p>
   );
+}
+
+// Announces "Searching…" and the result count to screen readers. It stays
+// mounted while empty, since a live region that appears with its text is
+// often not read.
+export function SearchStatus({ children }: { children?: ReactNode }) {
+  return <div role="status" aria-live="polite">{children}</div>;
 }
