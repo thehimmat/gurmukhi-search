@@ -5,6 +5,7 @@ import { NUMBER_ROLE_LABELS, NUMBER_ROLE_HELP, NumberRole, splitBySpans } from '
 import { FuzzyLevel, fuzzyHighlightSpans } from '@/lib/fuzzy';
 import { lineHref } from '@/lib/viewer';
 import { containsSpans } from '@/lib/contains';
+import { snapToClusters } from '@/lib/gurmukhi-clusters';
 
 type Props = {
   line: LineWithMeta;
@@ -42,7 +43,7 @@ function HighlightedText({
 function Marked({ text, spans }: { text: string; spans: { start: number; end: number }[] }) {
   return (
     <>
-      {splitBySpans(text, spans).map((part, i) =>
+      {splitBySpans(text, snapToClusters(text, spans)).map((part, i) =>
         part.marked
           ? <mark key={i} className="bg-[#f5d98e] rounded-sm">{part.text}</mark>
           : <span key={i}>{part.text}</span>,
