@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { NoResults, ResultCount } from './ResultStatus';
+import { NoResults, ResultCount, SearchStatus } from './ResultStatus';
 
 const text = (el: React.ReactElement) => renderToStaticMarkup(el).replace(/<[^>]+>/g, '');
 
@@ -32,5 +32,12 @@ describe('NoResults', () => {
 
   it('can carry its own message', () => {
     expect(text(<NoResults message="No words match this letter set" />)).toBe('No words match this letter set');
+  });
+});
+
+describe('SearchStatus', () => {
+  it('is a polite live region that stays mounted while empty', () => {
+    expect(renderToStaticMarkup(<SearchStatus />)).toMatch(/role="status" aria-live="polite"/);
+    expect(renderToStaticMarkup(<SearchStatus>Searching…</SearchStatus>)).toContain('Searching…');
   });
 });

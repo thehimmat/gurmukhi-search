@@ -63,4 +63,8 @@ describe('ShabadCard viewer link', () => {
     const g: ShabadGroup = { key: 's1', lines: [line(1, { gurmukhi: 'ਸਲੋਕੁ ॥' }), line(2, { gurmukhi: 'ਪਵਣੁ ਗੁਰੂ ਪਾਣੀ ਪਿਤਾ ਮਾਤਾ ਧਰਤਿ ਮਹਤੁ ॥' })] };
     expect(render(g)).toContain('href="/line/2#line-2"');
   });
+
+  it('renders nothing for an empty group', () => {
+    expect(render({ key: 's1', lines: [] })).toBe('');
+  });
 });

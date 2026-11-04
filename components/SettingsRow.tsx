@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useState } from 'react';
+import { ReactNode, useId, useRef, useState } from 'react';
 
 export type SettingsItem = {
   id: string;
@@ -16,17 +16,29 @@ export type SettingsItem = {
 export function SettingsRow({ items, defaultOpen }: { items: SettingsItem[]; defaultOpen?: string }) {
   const [open, setOpen] = useState<string | null>(defaultOpen ?? null);
   const active = items.find(i => i.id === open);
+  const baseId = useId();
+  const panelId = (id: string) => `${baseId}-${id}-panel`;
+  const toggles = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  // Escape closes the open panel and puts focus back on its toggle.
+  function onKeyDown(e: React.KeyboardEvent) {
+    if (e.key !== 'Escape' || !open) return;
+    toggles.current[open]?.focus();
+    setOpen(null);
+  }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2" onKeyDown={onKeyDown}>
       <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
         {items.map(item => {
           const isOpen = item.id === open;
           return (
             <button
               key={item.id}
+              ref={el => { toggles.current[item.id] = el; }}
               type="button"
               aria-expanded={isOpen}
+              aria-controls={isOpen ? panelId(item.id) : undefined}
               onClick={() => setOpen(isOpen ? null : item.id)}
               className={`inline-flex items-center gap-1 text-xs uppercase tracking-wide transition-colors ${
                 isOpen ? 'text-[#5c3d1e]' : 'text-[#a0896a] hover:text-[#5c3d1e]'
@@ -34,14 +46,16 @@ export function SettingsRow({ items, defaultOpen }: { items: SettingsItem[]; def
             >
               {item.label}
               {item.badge ? (
-                <span className="normal-case text-[10px] bg-[#8b5e3c] text-[#fdf6ec] rounded-full px-1.5">{item.badge}</span>
+                <span className="normal-case text-[10px] bg-[#8b5e3c] text-[#fdf6ec] rounded-full px-1.5">
+                  {item.badge}<span className="sr-only"> active</span>
+                </span>
               ) : null}
               <span aria-hidden className={`inline-block transition-transform ${isOpen ? 'rotate-90' : ''}`}>›</span>
             </button>
           );
         })}
       </div>
-      {active && <div>{active.content}</div>}
+      {active && <div id={panelId(active.id)}>{active.content}</div>}
     </div>
   );
 }

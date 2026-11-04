@@ -10,7 +10,7 @@ const LAYOUT_STORAGE_KEY = 'gurmukhi-input-layout';
 
 export const LAYOUT_OPTIONS: { key: KeyLayout; label: string; hint?: string }[] = [
   { key: 'gurmukhi-qwerty', label: 'Gurmukhi Keyboard' },
-  { key: 'igurbani',        label: 'igurbani',           hint: 'igurbani.com phonetic layout (t→ਟ, d→ਡ)' },
+  { key: 'igurbani',        label: 'iGurbani',           hint: 'igurbani.com phonetic layout (t→ਟ, d→ਡ)' },
 ];
 
 // Shared keyboard-layout preference, persisted to localStorage so the choice
@@ -43,11 +43,13 @@ export function KeyboardLayoutOptions({
 
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm text-[#7a6045]">
-      <div className="inline-flex rounded-md border border-[#c8b89a] bg-[#f5ede0] p-0.5">
+      <div role="radiogroup" aria-label="Keyboard layout" className="inline-flex rounded-md border border-[#c8b89a] bg-[#f5ede0] p-0.5">
         {LAYOUT_OPTIONS.map(({ key, label }) => (
           <button
             key={key}
             type="button"
+            role="radio"
+            aria-checked={layout === key}
             onClick={() => onChange(key)}
             className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
               layout === key

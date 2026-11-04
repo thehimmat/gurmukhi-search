@@ -6,9 +6,9 @@ export default function PatternHelp() {
   const categories = listCategories();
 
   return (
-    <details className="text-sm text-[#5c3d1e]">
+    <details className="group text-sm text-[#5c3d1e]">
       <summary className="cursor-pointer hover:text-[#3d2b1f] select-none list-none flex items-center gap-1">
-        <span className="text-xs">▶</span> Pattern syntax reference
+        <span aria-hidden className="text-xs transition-transform group-open:rotate-90">▶</span> Pattern syntax reference
       </summary>
 
       <div className="mt-3 space-y-4">

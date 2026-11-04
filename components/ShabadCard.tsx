@@ -6,14 +6,16 @@ import { sourceById } from '@/lib/sources';
 import { useSources } from './SourcesContext';
 import { lineHref } from '@/lib/viewer';
 
-// One shabad (or, for Sri Sarbloh Granth, one ang) from the reading feed:
-// where it is, then its opening line, like a search result. The rest of the
-// shabad opens in place.
+// One shabad (or, for lines without a shabad id, one ang) from the reading
+// feed: where it is, then its opening line, like a search result. The rest of
+// the shabad opens in place. An empty group renders nothing.
 export function ShabadCard({ group }: { group: ShabadGroup }) {
   const [expanded, setExpanded] = useState(false);
+  const { sources } = useSources();
   const first = group.lines[0];
+  if (!first) return null;
   const shabad = first.shabads;
-  const source = sourceById(useSources().sources, first.source_fk);
+  const source = sourceById(sources, first.source_fk);
   const sggs = source?.slug === 'sggs';
   const unit = source?.pageUnit ?? 'Ang';
   const shown = expanded ? group.lines : [group.lines[leadLineIndex(group.lines)]];

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type {
   SearchFilters,
   WriterFacet,
@@ -7,7 +8,7 @@ import type {
   CorpusFacet,
   NumberRoleFacet,
 } from '@/lib/supabase';
-import { activeFilterCount } from '@/lib/filters';
+import { activeFilterCount, ANG_MAX, clampAngRange } from '@/lib/filters';
 import {
   DEFAULT_NUMBER_ROLES,
   NUMBER_ROLES,
@@ -105,9 +106,27 @@ export default function FilterPanel({
     hint: c.lineCount.toLocaleString(),
   }));
 
-  function setAng(key: 'angMin' | 'angMax', value: number | undefined) {
-    onChange({ ...filters, [key]: value });
+  // What's typed in the ang boxes stays local until blur or Enter, so each
+  // keystroke doesn't start a search.
+  const [angDraft, setAngDraft] = useState<{ angMin?: string; angMax?: string }>({});
+  const angShown = (key: 'angMin' | 'angMax') => angDraft[key] ?? String(filters[key] ?? '');
+
+  function commitAng() {
+    const parse = (v: string) => (v.trim() ? parseInt(v, 10) : undefined);
+    const { from, to } = clampAngRange(parse(angShown('angMin')), parse(angShown('angMax')), ANG_MAX);
+    setAngDraft({});
+    if (from !== filters.angMin || to !== filters.angMax) onChange({ ...filters, angMin: from, angMax: to });
   }
+
+  const angInput = (key: 'angMin' | 'angMax') => ({
+    type: 'number',
+    min: 1,
+    max: ANG_MAX,
+    value: angShown(key),
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => setAngDraft(d => ({ ...d, [key]: e.target.value })),
+    onBlur: commitAng,
+    onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') commitAng(); },
+  });
 
   return (
     <div>
@@ -165,10 +184,7 @@ export default function FilterPanel({
             <label className="flex flex-col gap-1">
               <span className="text-xs text-[#7a6045] font-medium uppercase tracking-wide">Ang from</span>
               <input
-                type="number"
-                min={1} max={1430}
-                value={filters.angMin ?? ''}
-                onChange={e => setAng('angMin', e.target.value ? parseInt(e.target.value) : undefined)}
+                {...angInput('angMin')}
                 placeholder="1"
                 className="px-2 py-1.5 rounded border border-[#c8b89a] bg-[#fdf6ec] text-sm text-[#3d2b1f]"
               />
@@ -177,11 +193,8 @@ export default function FilterPanel({
             <label className="flex flex-col gap-1">
               <span className="text-xs text-[#7a6045] font-medium uppercase tracking-wide">Ang to</span>
               <input
-                type="number"
-                min={1} max={1430}
-                value={filters.angMax ?? ''}
-                onChange={e => setAng('angMax', e.target.value ? parseInt(e.target.value) : undefined)}
-                placeholder="1430"
+                {...angInput('angMax')}
+                placeholder={String(ANG_MAX)}
                 className="px-2 py-1.5 rounded border border-[#c8b89a] bg-[#fdf6ec] text-sm text-[#3d2b1f]"
               />
             </label>

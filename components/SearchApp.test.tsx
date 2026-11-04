@@ -12,7 +12,7 @@ vi.mock('./Feeds', () => ({
   WordFeed: () => <div>word-feed</div>,
 }));
 
-const { default: SearchApp } = await import('./SearchApp');
+const { default: SearchApp, SegmentedControl } = await import('./SearchApp');
 
 describe('SearchApp deep link', () => {
   beforeEach(() => { params = new URLSearchParams(); });
@@ -27,5 +27,16 @@ describe('SearchApp deep link', () => {
     expect(html).not.toContain('shabad-feed');
     expect(html).toContain('Searching');
     expect(html).not.toContain('No results');
+  });
+});
+
+describe('SegmentedControl', () => {
+  it('is a named radio group of Gurbani / Dictionary', () => {
+    const html = renderToStaticMarkup(<SegmentedControl value="kosh" onChange={() => {}} />);
+    expect(html).toMatch(/role="radiogroup"[^>]*aria-label="Search zone"/);
+    expect(html.match(/role="radio"/g)).toHaveLength(2);
+    expect(html.match(/type="button"/g)).toHaveLength(2);
+    expect(html).toMatch(/aria-checked="true"[^>]*>(?:(?!<button).)*Dictionary/);
+    expect(html).toMatch(/aria-checked="false"[^>]*>(?:(?!<button).)*Gurbani/);
   });
 });

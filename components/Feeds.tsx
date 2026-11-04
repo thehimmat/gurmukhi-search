@@ -18,7 +18,8 @@ export function ShabadFeed({ sources }: { sources?: number[] }) {
   );
   return (
     <InfiniteList
-      items={feed.items}
+      // An empty group has no line to key or show.
+      items={feed.items.filter(g => g.lines.length > 0)}
       getKey={g => `${g.key}:${g.lines[0].id}`}
       renderItem={g => <ShabadCard group={g} />}
       hasMore={feed.hasMore}
