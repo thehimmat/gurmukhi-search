@@ -13,6 +13,13 @@ describe('ResultCard highlighting', () => {
     expect(html).toMatch(/<mark[^>]*>ਸਤਿਗੁਰ<\/mark>/);
   });
 
+  it('never ends a mark between a letter and its vowel sign (gurmukhi-kosh#347)', () => {
+    for (const [text, mark] of [['ਆਜ ਮੋਹਿ', 'ਆਜ ਮੋ'], ['ਆਜ ਮ੍ਰਿਗ', 'ਆਜ ਮ੍ਰਿ'], ['ਆਜ ਮਾਰੋ', 'ਆਜ ਮਾ']]) {
+      const html = renderToStaticMarkup(<ResultCard line={{ ...line, gurmukhi: text }} query="ਆਜ ਮ" mode="contains" />);
+      expect(html).toContain(`>${mark}</mark>`);
+    }
+  });
+
   it('marks nothing for a non-matching exact query', () => {
     const html = renderToStaticMarkup(<ResultCard line={line} query="ਸਤੀਗੁਰ" mode="contains" />);
     expect(html).not.toContain('<mark');
