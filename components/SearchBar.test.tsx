@@ -10,3 +10,12 @@ describe('SearchBar', () => {
     expect(html).not.toMatch(/<button[^>]*>Search<\/button>/);
   });
 });
+
+describe('SearchBar clear button', () => {
+  it('is a plain button, not a form submit', () => {
+    const html = renderToStaticMarkup(
+      <SearchBar value="ਸ" onChange={() => {}} onSubmit={() => {}} mode="contains" layout="gurmukhi-qwerty" />,
+    );
+    expect(html).toMatch(/<button type="button"[^>]*aria-label="Clear"/);
+  });
+});

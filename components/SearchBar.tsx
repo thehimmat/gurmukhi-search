@@ -64,7 +64,8 @@ export default function SearchBar({ value, onChange, onSubmit, mode, placeholder
           />
           {value && (
             <button
-              onClick={() => onChange('')}
+              type="button"
+              onClick={() => { onChange(''); inputRef.current?.focus(); }}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-[#a0896a] hover:text-[#5c3d1e] text-lg"
               aria-label="Clear"
             >×</button>

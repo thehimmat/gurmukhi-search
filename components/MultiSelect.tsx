@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 export type Option = {
   value: string;
@@ -23,6 +23,9 @@ type Props = {
 export default function MultiSelect({ label, options, selected, onChange, allLabel }: Props) {
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const labelId = useId();
+  const summaryId = useId();
 
   // Close on outside click or Escape, the way a native dropdown does.
   useEffect(() => {
@@ -30,16 +33,18 @@ export default function MultiSelect({ label, options, selected, onChange, allLab
     function onDown(e: MouseEvent) {
       if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
     }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false);
-    }
     document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
+    return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
+
+  // Escape closes just this list (not the settings panel around it) and puts
+  // focus back on the button.
+  function onKeyDown(e: React.KeyboardEvent) {
+    if (e.key !== 'Escape' || !open) return;
+    e.stopPropagation();
+    setOpen(false);
+    buttonRef.current?.focus();
+  }
 
   function toggle(value: string) {
     onChange(
@@ -59,16 +64,18 @@ export default function MultiSelect({ label, options, selected, onChange, allLab
   let lastGroup: string | undefined;
 
   return (
-    <div className="flex flex-col gap-1 relative" ref={boxRef}>
-      <span className="text-xs text-[#7a6045] font-medium uppercase tracking-wide">{label}</span>
+    <div className="flex flex-col gap-1 relative" ref={boxRef} onKeyDown={onKeyDown}>
+      <span id={labelId} className="text-xs text-[#7a6045] font-medium uppercase tracking-wide">{label}</span>
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
+        aria-labelledby={`${labelId} ${summaryId}`}
         className="px-2 py-1.5 rounded border border-[#c8b89a] bg-[#fdf6ec] text-sm text-[#3d2b1f] text-left flex items-center justify-between gap-2"
       >
-        <span className="truncate">{summary}</span>
-        <span className="text-xs text-[#7a6045]">▾</span>
+        <span id={summaryId} className="truncate">{summary}</span>
+        <span aria-hidden className="text-xs text-[#7a6045]">▾</span>
       </button>
 
       {open && (
