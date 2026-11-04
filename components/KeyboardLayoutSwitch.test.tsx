@@ -32,7 +32,7 @@ describe('KeyboardLayoutOptions', () => {
     const html = renderToStaticMarkup(<KeyboardLayoutOptions layout="igurbani" onChange={() => {}} />);
     expect(html).toMatch(/role="radiogroup"[^>]*aria-label="Keyboard layout"/);
     expect(html.match(/role="radio"/g)).toHaveLength(2);
-    expect(html).toMatch(/aria-checked="true"[^>]*>igurbani</);
+    expect(html).toMatch(/aria-checked="true"[^>]*>iGurbani</);
     expect(html).toMatch(/aria-checked="false"[^>]*>Gurmukhi Keyboard</);
   });
 });
