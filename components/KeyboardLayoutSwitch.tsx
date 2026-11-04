@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { SettingsRow } from './SettingsRow';
+import { safeGet, safeSet } from '@/lib/safe-storage';
 
 export type KeyLayout = 'gurmukhi-qwerty' | 'igurbani';
 
@@ -18,13 +19,13 @@ export function useKeyboardLayout() {
   const [layout, setLayout] = useState<KeyLayout>('gurmukhi-qwerty');
 
   useEffect(() => {
-    const saved = localStorage.getItem(LAYOUT_STORAGE_KEY);
+    const saved = safeGet(LAYOUT_STORAGE_KEY);
     if (saved === 'gurmukhi-qwerty' || saved === 'igurbani') setLayout(saved);
   }, []);
 
   function choose(next: KeyLayout) {
     setLayout(next);
-    localStorage.setItem(LAYOUT_STORAGE_KEY, next);
+    safeSet(LAYOUT_STORAGE_KEY, next);
   }
 
   return { layout, choose };

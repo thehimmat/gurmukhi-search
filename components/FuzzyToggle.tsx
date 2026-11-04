@@ -1,5 +1,6 @@
 'use client';
 
+import { safeGet, safeSet } from '@/lib/safe-storage';
 import { useEffect, useState } from 'react';
 import { FUZZY_LEVELS, FuzzyLevel, parseFuzzyLevel } from '@/lib/fuzzy';
 
@@ -11,14 +12,12 @@ export function useFuzzyLevel() {
   const [level, setLevel] = useState<FuzzyLevel>(0);
 
   useEffect(() => {
-    try {
-      setLevel(parseFuzzyLevel(localStorage.getItem(FUZZY_STORAGE_KEY)));
-    } catch {}
+    setLevel(parseFuzzyLevel(safeGet(FUZZY_STORAGE_KEY)));
   }, []);
 
   function choose(next: FuzzyLevel) {
     setLevel(next);
-    try { localStorage.setItem(FUZZY_STORAGE_KEY, String(next)); } catch {}
+    safeSet(FUZZY_STORAGE_KEY, String(next));
   }
 
   return { level, choose };
