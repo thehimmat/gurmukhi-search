@@ -89,6 +89,7 @@ function mapFlatLineRow(r: FlatLineRow): LineWithMeta {
     gurmukhi: r.gurmukhi,
     translation_en: r.translation_en,
     transliteration_en: r.transliteration_en,
+    source_fk: r.source_fk,
     shabads: hasShabad
       ? {
           id: r.shabad_id ?? 0,

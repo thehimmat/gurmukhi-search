@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ResultCard from './ResultCard';
+import { SourcesProvider } from './SourcesContext';
+import type { SourceInfo } from '@/lib/sources';
 
 const line = {
   id: 1, verse_id: 1, shabad_id: 1, ang: 8, line_no: 14, gurmukhi: 'ੴ ਸਤਿਗੁਰ ਪ੍ਰਸਾਦਿ ॥',
@@ -32,5 +34,37 @@ describe('ResultCard viewer link', () => {
       <ResultCard line={{ id: 4321, verse_id: 4321, shabad_id: 1, ang: 3, line_no: 1, gurmukhi: 'ਸੋਚੈ ਸੋਚਿ', translation_en: null, transliteration_en: null, shabads: null }} query="ਸੋਚਿ" mode="contains" />,
     );
     expect(html).toContain('href="/line/4321#line-4321"');
+  });
+});
+
+describe('ResultCard source', () => {
+  const SOURCES: SourceInfo[] = [
+    { id: 1, slug: 'sggs', name: 'Sri Guru Granth Sahib Ji', pageUnit: 'Ang', searchedByDefault: true },
+    { id: 3, slug: 'dasam', name: 'Dasam Bani', pageUnit: 'Ang', searchedByDefault: true },
+    { id: 5, slug: 'vaaran', name: 'Vaaran Bhai Gurdas Ji', pageUnit: 'Vaar', searchedByDefault: false },
+  ];
+  const meta = (source_fk?: number, sources = SOURCES) =>
+    renderToStaticMarkup(
+      <SourcesProvider sources={sources}>
+        <ResultCard line={{ ...line, source_fk }} query="" mode="contains" />
+      </SourcesProvider>,
+    ).replace(/<[^>]+>/g, '|');
+
+  it('names the scripture and its page unit', () => {
+    expect(meta(5)).toContain('Vaaran Bhai Gurdas Ji');
+    expect(meta(5)).toContain('Vaar| 8');
+    expect(meta(5)).not.toContain('Ang');
+    expect(meta(3)).toContain('Dasam Bani');
+    expect(meta(3)).toContain('Ang| 8');
+  });
+
+  it('keeps Sri Guru Granth Sahib Ji results as a plain "Ang N", like the feed', () => {
+    expect(meta(1)).toContain('Ang| 8');
+    expect(meta(1)).not.toContain('Sri Guru Granth Sahib Ji');
+  });
+
+  it('falls back to "Ang N" when the source is unknown', () => {
+    expect(meta(undefined)).toContain('Ang| 8');
+    expect(meta(9)).toContain('Ang| 8');
   });
 });
