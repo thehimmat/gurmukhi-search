@@ -21,7 +21,7 @@ import WordList from '@/components/WordList';
 import WordResultControls from '@/components/WordResultControls';
 import { ShabadFeed, WordFeed } from '@/components/Feeds';
 import { InfiniteList } from '@/components/InfiniteList';
-import { NoResults, ResultCount } from '@/components/ResultStatus';
+import { NoResults, ResultCount, SearchStatus } from '@/components/ResultStatus';
 import { ErrorNotice } from '@/components/ErrorNotice';
 import { responseError, thrownError } from '@/lib/client-errors';
 import { searchFailed } from '@/lib/search-state';
@@ -75,9 +75,11 @@ export default function SearchApp() {
   );
 }
 
-function SegmentedControl({ value, onChange }: { value: AppMode; onChange: (v: AppMode) => void }) {
+export function SegmentedControl({ value, onChange }: { value: AppMode; onChange: (v: AppMode) => void }) {
   return (
     <div
+      role="radiogroup"
+      aria-label="Search zone"
       style={{
         display: 'inline-flex',
         background: 'var(--bg-alt)',
@@ -94,6 +96,9 @@ function SegmentedControl({ value, onChange }: { value: AppMode; onChange: (v: A
       ] as { key: AppMode; gurmukhi: string; label: string }[]).map(({ key, gurmukhi, label }) => (
         <button
           key={key}
+          type="button"
+          role="radio"
+          aria-checked={value === key}
           onClick={() => onChange(key)}
           style={{
             display: 'flex',
@@ -255,11 +260,13 @@ function KoshSearch({ query, setQuery, writers, corpora, metaFailed, onRetryMeta
         />
       </div>
 
-      {loading && (
-        <p style={{ color: 'var(--text-secondary)', fontFamily: '"Inter", sans-serif', fontSize: '0.875rem', padding: '0.5rem 0.25rem' }}>
-          {searchingLabel(fuzzy.level)}
-        </p>
-      )}
+      <SearchStatus>
+        {loading && (
+          <p style={{ color: 'var(--text-secondary)', fontFamily: '"Inter", sans-serif', fontSize: '0.875rem', padding: '0.5rem 0.25rem' }}>
+            {searchingLabel(fuzzy.level)}
+          </p>
+        )}
+      </SearchStatus>
 
       {results.length > 0 && (
         <ul style={{ listStyle: 'none', margin: '0.5rem 0 0', padding: 0, border: '1px solid var(--border)', borderRadius: '6px', background: 'white', overflow: 'hidden' }}>
@@ -343,11 +350,13 @@ function SearchPage() {
     totalCapped: false,
     hasMore: false,
     page: 0,
-    loading: false,
+    // A ?q= link starts as that search, already under way, so the first paint
+    // shows "Searching…" rather than the reading feed (#39).
+    loading: !!query.trim(),
     loadingMore: false,
     error: null,
     loadMoreError: null,
-    committedQuery: '',
+    committedQuery: query.trim() ? query : '',
     numberRoles: null,
   });
   const [metaFailed, setMetaFailed] = useState(false);
@@ -482,10 +491,13 @@ function SearchPage() {
   // Search as you type: the latest query runs once typing pauses. runSearch
   // aborts the request before it, so a slow early response can't land over a
   // newer one. Letter Set has its own builder and still searches on submit.
+  const firstSearch = useRef(true);
   useEffect(() => {
     if (appMode !== 'gurbani' || searchMode === 'letterset') return;
-    // Clearing the box takes effect at once, not after the pause.
-    const delay = query.trim() ? SEARCH_DEBOUNCE_MS : 0;
+    // Clearing the box takes effect at once, not after the pause, and so does
+    // the search a ?q= link opens with.
+    const delay = query.trim() && !firstSearch.current ? SEARCH_DEBOUNCE_MS : 0;
+    firstSearch.current = false;
     const t = setTimeout(() => runSearch(query, searchMode, filtersRef.current, 0), delay);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -514,7 +526,11 @@ function SearchPage() {
 
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
+  // Only a change re-runs the search; the first one is the query effect's.
+  const searchedFilters = useRef(filters);
   useEffect(() => {
+    if (searchedFilters.current === filters) return;
+    searchedFilters.current = filters;
     if (state.committedQuery) {
       runSearch(state.committedQuery, searchMode, filtersRef.current, 0);
     }
@@ -588,7 +604,7 @@ function SearchPage() {
 
           <div style={{ maxWidth: '860px', margin: '0 auto', padding: '0.75rem 1.5rem 0' }}>
             {searchMode === 'letterset' ? (
-              <LetterSetBuilder query={letterSet} onChange={setLetterSet} onSubmit={handleSubmit} />
+              <LetterSetBuilder query={letterSet} onChange={setLetterSet} onSubmit={handleSubmit} layout={layout} />
             ) : (
               <SearchBar
                 value={query}
@@ -647,12 +663,14 @@ function SearchPage() {
           </div>
 
           <div style={{ maxWidth: '860px', margin: '0 auto', padding: '0.5rem 1.5rem 3rem' }}>
-            {(hasResults || state.loading) && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', fontSize: '0.875rem', color: 'var(--text-secondary)', fontFamily: '"Inter", sans-serif' }}>
-                {hasResults && <ResultCount showed={showed} total={total} capped={state.totalCapped} hasMore={hasMore} />}
-                {state.loading && <span style={{ color: 'var(--accent)' }} className="animate-pulse">{searchingLabel(searchMode === 'contains' || searchMode === 'first_letter' ? fuzzy.level : 0)}</span>}
-              </div>
-            )}
+            <SearchStatus>
+              {(hasResults || state.loading) && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', fontSize: '0.875rem', color: 'var(--text-secondary)', fontFamily: '"Inter", sans-serif' }}>
+                  {hasResults && <ResultCount showed={showed} total={total} capped={state.totalCapped} hasMore={hasMore} />}
+                  {state.loading && <span style={{ color: 'var(--accent)' }} className="animate-pulse">{searchingLabel(searchMode === 'contains' || searchMode === 'first_letter' ? fuzzy.level : 0)}</span>}
+                </div>
+              )}
+            </SearchStatus>
 
             {state.error && !state.loading && <ErrorNotice message={state.error} onRetry={handleSubmit} />}
 
@@ -664,6 +682,7 @@ function SearchPage() {
                 onFilterChange={setWordFilter}
                 filterMode={wordFilterMode}
                 onFilterModeChange={setWordFilterMode}
+                layout={layout}
               />
             )}
 
@@ -708,7 +727,9 @@ function SearchPage() {
               </div>
             )}
 
-            {!state.committedQuery && (
+            {/* Not while a query is in the box either, so a ?q= link doesn't
+                fetch the feed before its own results. */}
+            {!state.committedQuery && !query.trim() && (
               <ShabadFeed sources={filters.sources} />
             )}
           </div>

@@ -17,7 +17,7 @@ const MODES: { id: Mode; label: string; desc: string; hidden?: boolean }[] = [
   {
     id: 'first_letter',
     label: 'First Letter',
-    desc: 'Anagram search — match first letter of each word (like igurbani)',
+    desc: 'Anagram search — match first letter of each word (like iGurbani)',
   },
   {
     id: 'pattern',
@@ -35,12 +35,13 @@ const MODES: { id: Mode; label: string; desc: string; hidden?: boolean }[] = [
 
 export default function ModeSelector({ value, onChange }: Props) {
   return (
-    <div className="flex gap-1 bg-[#f0e4d0] rounded-lg p-1" role="tablist">
+    <div className="flex gap-1 bg-[#f0e4d0] rounded-lg p-1" role="radiogroup" aria-label="Search mode">
       {MODES.filter(m => !m.hidden).map(m => (
         <button
           key={m.id}
-          role="tab"
-          aria-selected={value === m.id}
+          type="button"
+          role="radio"
+          aria-checked={value === m.id}
           title={m.desc}
           onClick={() => onChange(m.id)}
           className={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
