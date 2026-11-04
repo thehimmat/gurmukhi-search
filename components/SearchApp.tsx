@@ -21,7 +21,7 @@ import WordList from '@/components/WordList';
 import WordResultControls from '@/components/WordResultControls';
 import { ShabadFeed, WordFeed } from '@/components/Feeds';
 import { InfiniteList } from '@/components/InfiniteList';
-import { NoResults, ResultCount } from '@/components/ResultStatus';
+import { NoResults, ResultCount, SearchStatus } from '@/components/ResultStatus';
 import { ErrorNotice } from '@/components/ErrorNotice';
 import { responseError, thrownError } from '@/lib/client-errors';
 import { searchFailed } from '@/lib/search-state';
@@ -75,9 +75,11 @@ export default function SearchApp() {
   );
 }
 
-function SegmentedControl({ value, onChange }: { value: AppMode; onChange: (v: AppMode) => void }) {
+export function SegmentedControl({ value, onChange }: { value: AppMode; onChange: (v: AppMode) => void }) {
   return (
     <div
+      role="radiogroup"
+      aria-label="Search zone"
       style={{
         display: 'inline-flex',
         background: 'var(--bg-alt)',
@@ -94,6 +96,9 @@ function SegmentedControl({ value, onChange }: { value: AppMode; onChange: (v: A
       ] as { key: AppMode; gurmukhi: string; label: string }[]).map(({ key, gurmukhi, label }) => (
         <button
           key={key}
+          type="button"
+          role="radio"
+          aria-checked={value === key}
           onClick={() => onChange(key)}
           style={{
             display: 'flex',
@@ -255,11 +260,13 @@ function KoshSearch({ query, setQuery, writers, corpora, metaFailed, onRetryMeta
         />
       </div>
 
-      {loading && (
-        <p style={{ color: 'var(--text-secondary)', fontFamily: '"Inter", sans-serif', fontSize: '0.875rem', padding: '0.5rem 0.25rem' }}>
-          {searchingLabel(fuzzy.level)}
-        </p>
-      )}
+      <SearchStatus>
+        {loading && (
+          <p style={{ color: 'var(--text-secondary)', fontFamily: '"Inter", sans-serif', fontSize: '0.875rem', padding: '0.5rem 0.25rem' }}>
+            {searchingLabel(fuzzy.level)}
+          </p>
+        )}
+      </SearchStatus>
 
       {results.length > 0 && (
         <ul style={{ listStyle: 'none', margin: '0.5rem 0 0', padding: 0, border: '1px solid var(--border)', borderRadius: '6px', background: 'white', overflow: 'hidden' }}>
@@ -647,12 +654,14 @@ function SearchPage() {
           </div>
 
           <div style={{ maxWidth: '860px', margin: '0 auto', padding: '0.5rem 1.5rem 3rem' }}>
-            {(hasResults || state.loading) && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', fontSize: '0.875rem', color: 'var(--text-secondary)', fontFamily: '"Inter", sans-serif' }}>
-                {hasResults && <ResultCount showed={showed} total={total} capped={state.totalCapped} hasMore={hasMore} />}
-                {state.loading && <span style={{ color: 'var(--accent)' }} className="animate-pulse">{searchingLabel(searchMode === 'contains' || searchMode === 'first_letter' ? fuzzy.level : 0)}</span>}
-              </div>
-            )}
+            <SearchStatus>
+              {(hasResults || state.loading) && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', fontSize: '0.875rem', color: 'var(--text-secondary)', fontFamily: '"Inter", sans-serif' }}>
+                  {hasResults && <ResultCount showed={showed} total={total} capped={state.totalCapped} hasMore={hasMore} />}
+                  {state.loading && <span style={{ color: 'var(--accent)' }} className="animate-pulse">{searchingLabel(searchMode === 'contains' || searchMode === 'first_letter' ? fuzzy.level : 0)}</span>}
+                </div>
+              )}
+            </SearchStatus>
 
             {state.error && !state.loading && <ErrorNotice message={state.error} onRetry={handleSubmit} />}
 
