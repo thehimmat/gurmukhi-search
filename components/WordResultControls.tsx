@@ -1,8 +1,7 @@
 'use client';
 
-import { useRef } from 'react';
 import { useGurmukhiInput } from '@atthebunga/gurmukhi-input';
-import { useKeyboardLayout, KeyboardLayoutSwitch } from './KeyboardLayoutSwitch';
+import type { KeyLayout } from './KeyboardLayoutSwitch';
 import { WordSort, FilterMode } from '@/lib/letterset';
 
 type Props = {
@@ -12,6 +11,8 @@ type Props = {
   onFilterChange: (f: string) => void;
   filterMode: FilterMode;
   onFilterModeChange: (m: FilterMode) => void;
+  // The page's choice, set from its settings row.
+  layout: KeyLayout;
 };
 
 const SORT_OPTIONS: { id: WordSort; label: string }[] = [
@@ -29,9 +30,8 @@ export default function WordResultControls({
   onFilterChange,
   filterMode,
   onFilterModeChange,
+  layout,
 }: Props) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const { layout, choose } = useKeyboardLayout();
   const { onKeyDown, onPaste } = useGurmukhiInput({ value: filter, onChange: onFilterChange, layout });
 
   return (
@@ -52,7 +52,6 @@ export default function WordResultControls({
 
         <div className="relative min-w-[10rem] flex-1">
           <input
-            ref={inputRef}
             value={filter}
             onChange={(e) => onFilterChange(e.target.value)}
             onKeyDown={onKeyDown}
@@ -76,7 +75,6 @@ export default function WordResultControls({
       </div>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[#5c3d1e]">
-        <KeyboardLayoutSwitch layout={layout} onChange={(n) => { choose(n); inputRef.current?.focus(); }} />
         <span className="flex items-center gap-3">
           <span className="text-xs font-medium text-[#7a6045]">Match</span>
           <label className="flex items-center gap-1.5">

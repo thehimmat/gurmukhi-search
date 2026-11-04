@@ -45,7 +45,7 @@ export function decodeWordCursor(s: string | null | undefined): WordCursor | nul
 
 export type ShabadGroup = { key: string; lines: FeedLine[] };
 
-// Sri Sarbloh Granth has no shabad ids, so its lines group by ang instead.
+// Lines without a shabad id group by ang instead.
 const groupKey = (l: FeedLine) =>
   l.shabad_id != null ? `s${l.shabad_id}` : `a${l.source_fk}:${l.ang}`;
 

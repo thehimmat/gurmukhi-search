@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useGurmukhiInput } from '@atthebunga/gurmukhi-input';
-import { useKeyboardLayout, KeyboardLayoutSwitch } from './KeyboardLayoutSwitch';
+import type { KeyLayout } from './KeyboardLayoutSwitch';
 import {
   isBaseChar,
   MUKTA_SYMBOL,
@@ -20,6 +20,8 @@ type Props = {
   query: LetterSetQuery;
   onChange: (q: LetterSetQuery) => void;
   onSubmit: () => void;
+  // The page's choice, set from its settings row.
+  layout: KeyLayout;
 };
 
 const EXTRA_OPTIONS: { id: ExtraMode; label: string; desc: string }[] = [
@@ -31,10 +33,9 @@ const EXTRA_OPTIONS: { id: ExtraMode; label: string; desc: string }[] = [
 const chipBase =
   'px-2.5 py-1 rounded-md text-sm font-medium border transition-colors cursor-pointer select-none';
 
-export default function LetterSetBuilder({ query, onChange, onSubmit }: Props) {
+export default function LetterSetBuilder({ query, onChange, onSubmit, layout }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState('');
-  const { layout, choose } = useKeyboardLayout();
   const { onKeyDown, onPaste } = useGurmukhiInput({ value: draft, onChange: setDraft, layout });
 
   const valid = validateLetterSet(query);
@@ -111,7 +112,6 @@ export default function LetterSetBuilder({ query, onChange, onSubmit }: Props) {
             style={{ fontFamily: '"Noto Sans Gurmukhi", serif' }}
           />
         </div>
-        <KeyboardLayoutSwitch layout={layout} onChange={(n) => { choose(n); inputRef.current?.focus(); }} />
         <label className="flex items-center gap-1.5 text-sm text-[#5c3d1e]">
           <input
             type="checkbox"

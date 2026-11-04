@@ -12,14 +12,14 @@ describe('KeyboardLayoutSwitch', () => {
     const html = render();
     expect(html).toMatch(/aria-expanded="false"[^>]*>Keyboard.*›/);
     expect(html).not.toContain('Gurmukhi Keyboard');
-    expect(html).not.toContain('igurbani');
+    expect(html).not.toMatch(/igurbani/i);
   });
 
   it('shows the layout options when expanded', () => {
     const html = render({ defaultOpen: true });
     expect(html).toContain('aria-expanded="true"');
     expect(html).toContain('>Gurmukhi Keyboard<');
-    expect(html).toContain('>igurbani<');
+    expect(html).toContain('>iGurbani<');
   });
 
   it('drops the macOS QWERTY hint when expanded', () => {
@@ -32,7 +32,7 @@ describe('KeyboardLayoutOptions', () => {
     const html = renderToStaticMarkup(<KeyboardLayoutOptions layout="igurbani" onChange={() => {}} />);
     expect(html).toMatch(/role="radiogroup"[^>]*aria-label="Keyboard layout"/);
     expect(html.match(/role="radio"/g)).toHaveLength(2);
-    expect(html).toMatch(/aria-checked="true"[^>]*>igurbani</);
+    expect(html).toMatch(/aria-checked="true"[^>]*>iGurbani</);
     expect(html).toMatch(/aria-checked="false"[^>]*>Gurmukhi Keyboard</);
   });
 });

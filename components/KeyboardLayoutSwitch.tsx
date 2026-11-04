@@ -10,7 +10,7 @@ const LAYOUT_STORAGE_KEY = 'gurmukhi-input-layout';
 
 export const LAYOUT_OPTIONS: { key: KeyLayout; label: string; hint?: string }[] = [
   { key: 'gurmukhi-qwerty', label: 'Gurmukhi Keyboard' },
-  { key: 'igurbani',        label: 'igurbani',           hint: 'igurbani.com phonetic layout (t→ਟ, d→ਡ)' },
+  { key: 'igurbani',        label: 'iGurbani',           hint: 'igurbani.com phonetic layout (t→ਟ, d→ਡ)' },
 ];
 
 // Shared keyboard-layout preference, persisted to localStorage so the choice
