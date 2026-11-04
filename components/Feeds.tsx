@@ -26,6 +26,7 @@ export function ShabadFeed({ sources }: { sources?: number[] }) {
       error={feed.error}
       onLoadMore={feed.loadMore}
       estimateSize={150}
+      emptyMessage="No shabads in the selected scriptures."
     />
   );
 }
@@ -54,6 +55,7 @@ export function WordFeed() {
       onLoadMore={feed.loadMore}
       estimateSize={58}
       gap={8}
+      emptyMessage="No words to show."
     />
   );
 }

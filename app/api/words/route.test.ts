@@ -76,3 +76,26 @@ describe('/api/words', () => {
     expect((await get('q=ਸਬਦ')).headers.get('cache-control')).toMatch(/s-maxage=\d+/);
   });
 });
+
+describe('/api/words errors (#48)', () => {
+  it('hides the database message: 504 on a timeout, 500 otherwise', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const rpc = vi.spyOn(db.client, 'rpc')
+      .mockResolvedValueOnce({ data: null, error: { message: 'canceling statement due to statement timeout', code: '57014' } } as never)
+      .mockResolvedValueOnce({ data: null, error: { message: 'function search_words_fuzzy does not exist' } } as never);
+    const slow = await get('q=ਸਬਦ&fuzzy=2');
+    expect(slow.status).toBe(504);
+    expect((await slow.json()).code).toBe('timeout');
+    const broken = await get('q=ਸਬਦ&fuzzy=2');
+    expect(broken.status).toBe(500);
+    expect(JSON.stringify(await broken.json())).not.toContain('does not exist');
+    rpc.mockRestore(); log.mockRestore();
+  });
+
+  it('refuses a query over 200 characters', async () => {
+    const res = await get(`q=${encodeURIComponent('ਸ'.repeat(201))}`);
+    expect(res.status).toBe(400);
+    expect(db.log).toHaveLength(0);
+    expect(db.rpcLog).toHaveLength(0);
+  });
+});

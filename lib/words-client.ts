@@ -1,5 +1,6 @@
 import type { Word } from './supabase';
 import type { FuzzyLevel } from './fuzzy';
+import { responseError } from './client-errors';
 
 // The Dictionary's filters: which scriptures and writers a word must appear in.
 export type WordFilters = { sources?: number[]; writers?: string[] };
@@ -20,7 +21,7 @@ export async function fetchWords(
   [...(filters.sources ?? [])].sort((a, b) => a - b).forEach((id) => params.append('source', String(id)));
   [...(filters.writers ?? [])].sort().forEach((w) => params.append('writer', w));
   const res = await fetch(`/api/words?${params}`, { signal });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error ?? `Lookup failed (${res.status})`);
+  if (!res.ok) throw new Error(await responseError(res));
+  const body = await res.json();
   return body.words ?? [];
 }

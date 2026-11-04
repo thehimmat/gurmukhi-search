@@ -31,4 +31,21 @@ describe('InfiniteList', () => {
   it('offers a retry when a page fails', () => {
     expect(renderToStaticMarkup(<InfiniteList {...base} hasMore loading={false} error="boom" />)).toMatch(/<button[^>]*>Try again</);
   });
+  it('says the list failed, not "more", when the first page fails', () => {
+    const html = renderToStaticMarkup(<InfiniteList {...base} hasMore loading={false} error="boom" />);
+    expect(html).toContain('Couldn&#x27;t load this list');
+    expect(html).not.toContain('load more');
+  });
+  it('says "more" once some rows are showing', () => {
+    const html = renderToStaticMarkup(<InfiniteList {...base} items={[1]} hasMore loading={false} error="boom" />);
+    expect(html).toContain('Couldn&#x27;t load more');
+  });
+  it('shows the empty message when a list finishes with nothing in it', () => {
+    const html = renderToStaticMarkup(<InfiniteList {...base} hasMore={false} loading={false} error={null} emptyMessage="Nothing here" />);
+    expect(html).toContain('Nothing here');
+  });
+  it('shows no empty message while there may be more', () => {
+    const html = renderToStaticMarkup(<InfiniteList {...base} hasMore loading={false} error={null} emptyMessage="Nothing here" />);
+    expect(html).not.toContain('Nothing here');
+  });
 });

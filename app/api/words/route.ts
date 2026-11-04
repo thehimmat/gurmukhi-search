@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { CDN_CACHE } from '@/lib/cache';
 import { parseFuzzyLevel } from '@/lib/fuzzy';
 import { escapeLike } from '@/lib/like';
+import { badInput, dbErrorResponse, MAX_QUERY_LENGTH, TOO_LONG } from '@/lib/api-error';
 
 type WordHit = { id: number; gurmukhi: string; frequency: number; match?: 'fold' };
 
@@ -12,6 +13,7 @@ export async function GET(req: NextRequest) {
   const fuzzy = parseFuzzyLevel(req.nextUrl.searchParams.get('fuzzy'));
 
   if (!q) return NextResponse.json({ words: [] }, { headers: { 'Cache-Control': CDN_CACHE } });
+  if (q.length > MAX_QUERY_LENGTH) return badInput(TOO_LONG);
 
   // Scripture / Writer filters (kosh 052): words attested in the selection,
   // most frequent within it, with that in-selection frequency.
@@ -26,7 +28,7 @@ export async function GET(req: NextRequest) {
       p_writers: writers.length ? writers : null,
       p_limit: limit,
     });
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) return dbErrorResponse(error, 'words');
     const words: WordHit[] = ((data ?? []) as Array<WordHit & { exact: boolean }>).map(({ exact, ...w }) =>
       exact || !fuzzy ? w : { ...w, match: 'fold' as const });
     return NextResponse.json({ words }, { headers: { 'Cache-Control': CDN_CACHE } });
@@ -36,7 +38,7 @@ export async function GET(req: NextRequest) {
   // Variant spellings are marked so the UI can label them.
   if (fuzzy > 0) {
     const { data, error } = await supabase.rpc('search_words_fuzzy', { p_query: q, p_level: fuzzy, p_limit: limit });
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) return dbErrorResponse(error, 'words');
     const words: WordHit[] = ((data ?? []) as Array<WordHit & { exact: boolean }>).map(({ exact, ...w }) =>
       exact ? w : { ...w, match: 'fold' as const });
     return NextResponse.json({ words }, { headers: { 'Cache-Control': CDN_CACHE } });
@@ -55,11 +57,11 @@ export async function GET(req: NextRequest) {
     .limit(limit);
 
   const { data, error } = await lookup(`${q_}%`);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return dbErrorResponse(error, 'words');
 
   if (!data || data.length === 0) {
     const { data: substring, error: substringErr } = await lookup(`%${q_}%`);
-    if (substringErr) return NextResponse.json({ error: substringErr.message }, { status: 500 });
+    if (substringErr) return dbErrorResponse(substringErr, 'words');
     return NextResponse.json({ words: substring ?? [] }, { headers: { 'Cache-Control': CDN_CACHE } });
   }
 

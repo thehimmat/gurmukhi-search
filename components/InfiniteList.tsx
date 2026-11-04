@@ -2,6 +2,7 @@
 
 import { ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
+import { ErrorNotice } from './ErrorNotice';
 
 // Rows from the end at which the next page starts loading, so it's usually in
 // before the reader reaches the bottom.
@@ -30,12 +31,14 @@ type Props<T> = {
   // First guess at a row's height; real heights are measured once rendered.
   estimateSize?: number;
   gap?: number;
+  // Shown when the list has finished and nothing came back.
+  emptyMessage?: string;
 };
 
 // An endless list: only the rows near the viewport are in the DOM, however
 // many pages have loaded, and the next page loads as the reader nears the end.
 export function InfiniteList<T>({
-  items, getKey, renderItem, hasMore, loading, error, onLoadMore, estimateSize = 160, gap = 12,
+  items, getKey, renderItem, hasMore, loading, error, onLoadMore, estimateSize = 160, gap = 12, emptyMessage,
 }: Props<T>) {
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
@@ -98,10 +101,15 @@ export function InfiniteList<T>({
       )}
 
       {error && !loading && (
-        <div className="mt-4 text-center text-sm text-[#7a6045]" role="alert">
-          Couldn&apos;t load more.{' '}
-          <button type="button" onClick={onLoadMore} className="underline text-[#8b5e3c]">Try again</button>
-        </div>
+        <ErrorNotice
+          compact
+          message={items.length ? "Couldn't load more." : "Couldn't load this list."}
+          onRetry={onLoadMore}
+        />
+      )}
+
+      {emptyMessage && !items.length && !hasMore && !loading && !error && (
+        <p className="mt-4 text-center text-sm text-[#7a6045]">{emptyMessage}</p>
       )}
     </div>
   );

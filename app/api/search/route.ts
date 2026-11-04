@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { CDN_CACHE, NO_STORE } from '@/lib/cache';
+import { CDN_CACHE } from '@/lib/cache';
+import { badInput, dbErrorResponse, MAX_QUERY_LENGTH, TOO_LONG } from '@/lib/api-error';
 import {
   searchContains,
   searchFirstLetters,
@@ -18,7 +19,10 @@ import { LetterSetQuery, ExtraMode, Scope, VowelMode, WordSort, FilterMode } fro
 
 export const runtime = 'nodejs';
 
-class SearchFailed extends Error {}
+// Thrown out of the first-page cache so a failure is never kept.
+class SearchFailed extends Error {
+  constructor(readonly result: SearchResult) { super(result.error ?? result.dbError?.message); }
+}
 
 // Parse the structured Letter Set query out of the request params.
 function parseLetterSet(sp: URLSearchParams): LetterSetQuery {
@@ -48,6 +52,7 @@ export async function GET(req: NextRequest) {
 
   const mode = sp.get('mode') ?? 'contains'; // contains | first_letter | pattern | letterset
   const query = sp.get('q') ?? '';
+  if (query.length > MAX_QUERY_LENGTH) return badInput(TOO_LONG);
   // A malformed page (page=abc) reads as the first page: NaN here used to come
   // back as page: null with an empty result, cached at the CDN for a day.
   const page = Math.max(0, parseInt(sp.get('page') ?? '0', 10) || 0);
@@ -68,12 +73,22 @@ export async function GET(req: NextRequest) {
   // the heading defaults. Presence, not length, is what separates the two.
   const numberRoles = sp.has('numrole') ? list('numrole') : undefined;
 
+  // Whole angs only; a typo like ang_min=1x used to reach the RPC as NaN.
+  const angBound = (key: string): number | undefined | null => {
+    const raw = sp.get(key);
+    if (raw === null || raw.trim() === '') return undefined;
+    return /^\d+$/.test(raw.trim()) ? parseInt(raw, 10) : null;
+  };
+  const angMin = angBound('ang_min');
+  const angMax = angBound('ang_max');
+  if (angMin === null || angMax === null) return badInput('Ang numbers must be whole numbers.');
+
   const filters: SearchFilters = {
     raags: raags.length ? raags : undefined,
     writers: writers.length ? writers : undefined,
     sources: sources.length ? sources : undefined,
-    angMin: sp.has('ang_min') ? parseInt(sp.get('ang_min')!, 10) : undefined,
-    angMax: sp.has('ang_max') ? parseInt(sp.get('ang_max')!, 10) : undefined,
+    angMin,
+    angMax,
     numberRoles,
   };
 
@@ -106,18 +121,17 @@ export async function GET(req: NextRequest) {
     result = page === 0
       ? await cachedFirstPage(firstPageKey(sp), async () => {
           const r = await run();
-          if (r.error) throw new SearchFailed(r.error);
+          if (r.error || r.dbError) throw new SearchFailed(r);
           return r;
         })
       : await run();
   } catch (e) {
     if (!(e instanceof SearchFailed)) throw e;
-    result = { lines: [], total: 0, error: e.message };
+    result = e.result;
   }
 
-  if (result.error) {
-    return NextResponse.json({ error: result.error }, { status: 400, headers: { 'Cache-Control': NO_STORE } });
-  }
+  if (result.dbError) return dbErrorResponse(result.dbError, `search ${mode}`);
+  if (result.error) return badInput(result.error);
 
   return NextResponse.json({
     lines: result.lines,

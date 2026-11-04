@@ -30,6 +30,9 @@ type Props = {
   // Word search filters by where a word is used (scripture, writer); raag and
   // ang range narrow lines, so they're left out there.
   facets?: 'lines' | 'words';
+  // The options couldn't be loaded (/api/meta failed after its retry).
+  unavailable?: boolean;
+  onRetry?: () => void;
 };
 
 // Writers group by the role their recorded name carries: the Gurus, then the
@@ -53,6 +56,8 @@ export default function FilterPanel({
   numberRoleFacets,
   showNumberRoles = false,
   facets = 'lines',
+  unavailable = false,
+  onRetry,
 }: Props) {
   const lineFacets = facets === 'lines';
   const { defaults } = useSources();
@@ -106,6 +111,12 @@ export default function FilterPanel({
 
   return (
     <div>
+      {unavailable && (
+        <p role="alert" className="mb-3 text-sm text-[#7a6045]" style={{ fontFamily: '"Inter", sans-serif' }}>
+          Filters unavailable.{' '}
+          {onRetry && <button type="button" onClick={onRetry} className="underline text-[#8b5e3c]">Retry</button>}
+        </p>
+      )}
 
       <div className={`grid grid-cols-2 gap-3 ${!lineFacets ? 'sm:grid-cols-2' : showNumberRoles ? 'sm:grid-cols-6' : 'sm:grid-cols-5'}`}>
         {showNumberRoles && (

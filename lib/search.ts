@@ -1,6 +1,7 @@
 // Search query builders — each mode returns { results, total }.
 // All queries target the kosh Supabase DB (read-only via anon key).
 
+import type { DbError } from './api-error';
 import {
   supabase,
   LineWithMeta,
@@ -44,7 +45,10 @@ export type SearchResult = {
   // and a role with no hits disabled. Travels with the result because it is
   // scoped to the searched value.
   numberRoles?: NumberRoleFacet[];
+  // A problem with the query itself (a bad pattern): shown to the reader as is.
   error?: string;
+  // The database failed: logged, and the reader sees lib/error-text.ts instead.
+  dbError?: DbError;
 };
 
 // The regex RPCs return shabad metadata as flat columns; the line components
@@ -142,7 +146,7 @@ export async function searchContains(
       ? supabase.rpc('count_lines_contains', { p_query: searchText, ...rpcFilterArgs(filters) })
       : null,
   ]);
-  if (error) return { lines: [], total: 0, error: error.message };
+  if (error) return { lines: [], total: 0, dbError: error };
 
   const rows = (data ?? []) as FlatLineRow[];
   const n = counted && !counted.error ? Number(Array.isArray(counted.data) ? counted.data[0] : counted.data) : NaN;
@@ -184,7 +188,7 @@ async function searchContainsFuzzy(
         })
       : null,
   ]);
-  if (error) return { lines: [], total: 0, error: error.message };
+  if (error) return { lines: [], total: 0, dbError: error };
   const rows = (data ?? []) as FlatLineRow[];
   const n = counted && !counted.error ? Number(Array.isArray(counted.data) ? counted.data[0] : counted.data) : NaN;
   return {
@@ -208,7 +212,7 @@ async function searchByRegex(
     p_limit: PAGE_SIZE,
     p_offset: offset,
   });
-  if (error) return { lines: [], total: 0, error: error.message };
+  if (error) return { lines: [], total: 0, dbError: error };
 
   const rows = (data ?? []) as FlatLineRow[];
   const total = rows[0]?.total_count ?? 0;
@@ -224,7 +228,7 @@ async function searchWordsByRegex(regex: string, page: number): Promise<SearchRe
     p_limit: PAGE_SIZE,
     p_offset: offset,
   });
-  if (error) return { lines: [], total: 0, error: error.message };
+  if (error) return { lines: [], total: 0, dbError: error };
 
   const rows = (data ?? []) as Array<Word & { total_count: number }>;
   const total = rows[0]?.total_count ?? 0;
@@ -255,7 +259,7 @@ export async function searchFirstLetters(
     p_offset: offset,
   });
 
-  if (error) return { lines: [], total: 0, error: error.message };
+  if (error) return { lines: [], total: 0, dbError: error };
 
   const rows = (data ?? []) as FlatLineRow[];
   const total = rows[0]?.total_count ?? 0;
@@ -295,7 +299,7 @@ export async function searchLetterSet(
   try {
     index = await getWordIndex();
   } catch (e) {
-    return { lines: [], total: 0, error: (e as Error).message };
+    return { lines: [], total: 0, dbError: { message: (e as Error).message } };
   }
 
   // index is ordered by frequency desc, so matches keep that order.
@@ -325,7 +329,7 @@ export async function searchLetterSet(
     p_limit: PAGE_SIZE + 1,
     p_offset: offset,
   });
-  if (error) return { lines: [], total: 0, error: error.message };
+  if (error) return { lines: [], total: 0, dbError: error };
 
   const rows = (data ?? []) as FlatLineRow[];
   const hasMore = rows.length > PAGE_SIZE;
@@ -413,7 +417,7 @@ export async function searchNumbers(
     roleCounts,
   ]);
 
-  if (rows.error) return { lines: [], total: 0, error: rows.error.message };
+  if (rows.error) return { lines: [], total: 0, dbError: rows.error };
 
   const data = (rows.data ?? []) as FlatLineRow[];
   return {
