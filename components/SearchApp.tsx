@@ -22,6 +22,9 @@ import WordResultControls from '@/components/WordResultControls';
 import { ShabadFeed, WordFeed } from '@/components/Feeds';
 import { InfiniteList } from '@/components/InfiniteList';
 import { NoResults, ResultCount } from '@/components/ResultStatus';
+import { ErrorNotice } from '@/components/ErrorNotice';
+import { responseError, thrownError } from '@/lib/client-errors';
+import { searchFailed } from '@/lib/search-state';
 import { fetchWords, type WordFilters, type WordHit } from '@/lib/words-client';
 import type {
   SearchFilters,
@@ -51,6 +54,9 @@ type SearchState = {
   // True while a further page (not a new search) is loading.
   loadingMore: boolean;
   error: string | null;
+  // A failed later page, kept apart from `error` so the results stay up and the
+  // endless list waits for a retry instead of re-firing (#48).
+  loadMoreError: string | null;
   committedQuery: string;
   // Per-role counts for the number currently showing; null for every other
   // kind of query. Drives the role checkboxes in FilterPanel.
@@ -111,7 +117,9 @@ function SegmentedControl({ value, onChange }: { value: AppMode; onChange: (v: A
   );
 }
 
-function KoshSearch({ writers, corpora }: { writers: WriterFacet[]; corpora: CorpusFacet[] }) {
+function KoshSearch({ writers, corpora, metaFailed, onRetryMeta }: {
+  writers: WriterFacet[]; corpora: CorpusFacet[]; metaFailed: boolean; onRetryMeta: () => void;
+}) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
@@ -121,6 +129,8 @@ function KoshSearch({ writers, corpora }: { writers: WriterFacet[]; corpora: Cor
   // The query the shown results answer, so "no results" waits for the lookup
   // of what's typed now rather than showing during the debounce.
   const [settled, setSettled] = useState('');
+  // Bumped by "Try again" to re-run the same lookup.
+  const [attempt, setAttempt] = useState(0);
   // Same default scriptures as Gurbani search; the filter is applied in the
   // database (kosh 052), and a word's count is its count inside the selection.
   const { defaults } = useSources();
@@ -144,14 +154,14 @@ function KoshSearch({ writers, corpora }: { writers: WriterFacet[]; corpora: Cor
         setSettled(q);
       } catch (e) {
         if ((e as Error).name === 'AbortError') return;
-        setError((e as Error).message);
+        setError(thrownError(e));
         setSettled(q);
       } finally {
         if (!ctrl.signal.aborted) setLoading(false);
       }
     }, 300);
     return () => { clearTimeout(t); ctrl.abort(); };
-  }, [query, fuzzy.level, filters]);
+  }, [query, fuzzy.level, filters, attempt]);
 
   function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault();
@@ -208,6 +218,8 @@ function KoshSearch({ writers, corpora }: { writers: WriterFacet[]; corpora: Cor
                   raags={[]}
                   writers={writers}
                   corpora={corpora}
+                  unavailable={metaFailed}
+                  onRetry={onRetryMeta}
                 />
               ),
             },
@@ -261,9 +273,9 @@ function KoshSearch({ writers, corpora }: { writers: WriterFacet[]; corpora: Cor
       )}
 
       {error && !loading && (
-        <p role="alert" style={{ color: '#dc2626', fontFamily: '"Inter", sans-serif', fontSize: '0.875rem', padding: '0.5rem 0.25rem' }}>
-          {error}
-        </p>
+        <div style={{ marginTop: '0.5rem' }}>
+          <ErrorNotice message={error} onRetry={() => setAttempt(n => n + 1)} />
+        </div>
       )}
 
       {!loading && !error && settled && settled === query.trim() && results.length === 0 && (
@@ -312,9 +324,11 @@ function SearchPage() {
     loading: false,
     loadingMore: false,
     error: null,
+    loadMoreError: null,
     committedQuery: '',
     numberRoles: null,
   });
+  const [metaFailed, setMetaFailed] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
   // Latest mode-specific inputs, so load-more / filter re-runs read fresh values.
@@ -329,22 +343,26 @@ function SearchPage() {
   const wordFilterModeRef = useRef(wordFilterMode);
   wordFilterModeRef.current = wordFilterMode;
 
-  useEffect(() => {
+  // After fetchMeta's own retry, a failure says so in the Filters panel, with
+  // a Retry, rather than leaving every dropdown at "No options".
+  const loadMeta = useCallback(() => {
+    setMetaFailed(false);
     fetchMeta()
       .then(({ raags, writers, corpora }) => {
         setRaags(raags ?? []);
         setWriters(writers ?? []);
         setCorpora(corpora ?? []);
       })
-      .catch(() => {}); // after the retry, the Filters dropdowns are left without options
+      .catch(() => setMetaFailed(true));
   }, []);
+  useEffect(() => { loadMeta(); }, [loadMeta]);
 
 
   const runSearch = useCallback(async (q: string, m: SearchMode, f: SearchFilters, page: number) => {
     const isLetterSet = m === 'letterset';
     const empty = isLetterSet ? letterSetRef.current.letters.length === 0 : !q.trim();
     if (empty) {
-      setState(s => ({ ...s, lines: [], words: [], total: 0, error: null, loading: false, loadingMore: false, committedQuery: '' }));
+      setState(s => ({ ...s, lines: [], words: [], total: 0, error: null, loadMoreError: null, loading: false, loadingMore: false, committedQuery: '' }));
       return;
     }
 
@@ -354,7 +372,7 @@ function SearchPage() {
 
     // A new first page keeps the previous results on screen until it lands, so
     // typing doesn't flash the list empty on every keystroke.
-    setState(s => ({ ...s, loading: true, loadingMore: page > 0, error: null }));
+    setState(s => ({ ...s, loading: true, loadingMore: page > 0, loadMoreError: null, error: page > 0 ? s.error : null }));
 
     const params = new URLSearchParams({ mode: m, page: String(page) });
     // Multi-select facets repeat their param once per selected value.
@@ -404,17 +422,18 @@ function SearchPage() {
 
     try {
       const res = await fetch(`/api/search?${params}`, { signal: ctrl.signal });
-      const json = await res.json();
-
       if (!res.ok) {
-        setState(s => ({ ...s, loading: false, loadingMore: false, error: json.error ?? 'Search failed' }));
+        const message = await responseError(res);
+        if (!ctrl.signal.aborted) setState(s => searchFailed(s, page, message));
         return;
       }
+      const json = await res.json();
 
       setState(s => ({
         loading: false,
         loadingMore: false,
         error: null,
+        loadMoreError: null,
         // Totals and role counts come with the first page only (kosh 052);
         // later pages keep the ones already shown.
         total: page === 0 ? json.total : (json.total ?? s.total),
@@ -428,7 +447,7 @@ function SearchPage() {
       }));
     } catch (e) {
       if ((e as Error).name !== 'AbortError') {
-        setState(s => ({ ...s, loading: false, loadingMore: false, error: 'Search failed' }));
+        setState(s => searchFailed(s, page, thrownError(e)));
       }
     }
   }, []);
@@ -504,7 +523,7 @@ function SearchPage() {
       </div>
 
       {/* Kosh mode */}
-      {appMode === 'kosh' && <KoshSearch writers={writers} corpora={corpora} />}
+      {appMode === 'kosh' && <KoshSearch writers={writers} corpora={corpora} metaFailed={metaFailed} onRetryMeta={loadMeta} />}
 
       {/* Gurbani search mode */}
       {appMode === 'gurbani' && (
@@ -514,7 +533,7 @@ function SearchPage() {
               value={searchMode}
               onChange={m => {
                 setSearchMode(m);
-                setState(s => ({ ...s, lines: [], words: [], total: 0, error: null, committedQuery: '' }));
+                setState(s => ({ ...s, lines: [], words: [], total: 0, error: null, loadMoreError: null, committedQuery: '' }));
               }}
             />
           </div>
@@ -556,6 +575,8 @@ function SearchPage() {
                       raags={raags}
                       writers={writers}
                       corpora={corpora}
+                      unavailable={metaFailed}
+                      onRetry={loadMeta}
                       numberRoleFacets={state.numberRoles}
                       // Offered as soon as the box holds only digits, so the control
                       // is visible while typing rather than appearing after results.
@@ -585,11 +606,7 @@ function SearchPage() {
               </div>
             )}
 
-            {state.error && (
-              <div style={{ marginBottom: '1rem', padding: '0.75rem 1rem', borderRadius: '6px', background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontSize: '0.875rem', fontFamily: '"Inter", sans-serif' }}>
-                {state.error}
-              </div>
-            )}
+            {state.error && !state.loading && <ErrorNotice message={state.error} onRetry={handleSubmit} />}
 
             {searchMode === 'letterset' && showingWords && state.committedQuery && (
               <WordResultControls
@@ -611,7 +628,7 @@ function SearchPage() {
                     renderItem={line => <ResultCard line={line} query={state.committedQuery} mode={searchMode} fuzzyLevel={fuzzy.level} />}
                     hasMore={hasMore}
                     loading={state.loadingMore}
-                    error={null}
+                    error={state.loadMoreError}
                     onLoadMore={handleLoadMore}
                   />
                 )}
@@ -625,7 +642,11 @@ function SearchPage() {
             {/* Line results load the next page as you scroll (InfiniteList).
                 Word-scope results (hidden Letter Set / Pattern modes) keep the
                 button until those modes come back. */}
-            {showingWords && hasMore && (
+            {showingWords && state.loadMoreError && !state.loading && (
+              <ErrorNotice compact message={state.loadMoreError} onRetry={handleLoadMore} />
+            )}
+
+            {showingWords && hasMore && !state.loadMoreError && (
               <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
                 <button
                   type="button"

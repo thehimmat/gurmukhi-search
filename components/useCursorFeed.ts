@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import { responseError, thrownError } from '@/lib/client-errors';
 
 type Page = { next: string | null; error?: string } & Record<string, unknown>;
 
@@ -46,8 +47,8 @@ export function useCursorFeed<T>(
     try {
       const sep = url.includes('?') ? '&' : '?';
       const res = await fetch(next ? `${url}${sep}after=${encodeURIComponent(next)}` : url, { signal: ctrl.signal });
+      if (!res.ok) throw new Error(await responseError(res));
       const page = (await res.json()) as Page;
-      if (!res.ok) throw new Error(page.error ?? `HTTP ${res.status}`);
       update(s => ({
         items: mergeRef.current(s.items, pickRef.current(page)),
         next: page.next,
@@ -56,7 +57,7 @@ export function useCursorFeed<T>(
       }));
     } catch (e) {
       if ((e as Error).name === 'AbortError') return;
-      update(() => ({ error: (e as Error).message || 'Failed to load', loading: false }));
+      update(() => ({ error: thrownError(e), loading: false }));
     }
   }, [url, next, done]);
 

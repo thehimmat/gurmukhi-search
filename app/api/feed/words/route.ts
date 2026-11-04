@@ -1,3 +1,4 @@
+import { dbErrorResponse } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { decodeWordCursor, wordPage } from '@/lib/feed';
@@ -17,6 +18,6 @@ export async function GET(req: NextRequest) {
     const page = await wordPage(supabase, after);
     return NextResponse.json(page, { headers: { 'Cache-Control': CDN_CACHE } });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 503, headers: { 'Cache-Control': NO_STORE } });
+    return dbErrorResponse({ message: (e as Error).message }, 'feed', 503);
   }
 }

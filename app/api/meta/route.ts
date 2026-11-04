@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { listRaags, listWriters, listCorpora } from '@/lib/search';
 import { CDN_CACHE, NO_STORE } from '@/lib/cache';
+import { ERROR_TEXT } from '@/lib/error-text';
 
 export const runtime = 'nodejs';
 
@@ -32,8 +33,9 @@ export async function GET() {
       headers: { 'Cache-Control': CDN_CACHE },
     });
   } catch (e) {
+    console.error('[meta]', (e as Error).message);
     return NextResponse.json(
-      { raags: [], writers: [], corpora: [], error: (e as Error).message },
+      { raags: [], writers: [], corpora: [], error: ERROR_TEXT.unavailable, code: 'unavailable' },
       { status: 503, headers: { 'Cache-Control': NO_STORE } },
     );
   }

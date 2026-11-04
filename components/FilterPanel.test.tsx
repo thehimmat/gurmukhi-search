@@ -22,4 +22,9 @@ describe('FilterPanel', () => {
     expect(html).toContain('Writer');
     for (const label of ['Raag', 'Ang from', 'Ang to']) expect(html).not.toContain(label);
   });
+  it('says the filters are unavailable, with a retry, when their options failed to load', () => {
+    const html = renderToStaticMarkup(<FilterPanel {...props} raags={[]} writers={[]} corpora={[]} unavailable onRetry={() => {}} />);
+    expect(html).toContain('Filters unavailable');
+    expect(html).toMatch(/<button[^>]*>Retry</);
+  });
 });
