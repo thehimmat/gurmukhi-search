@@ -56,6 +56,11 @@ describe('searchContains', () => {
     expect(r.lines[0]).toMatchObject({ id: 21, gurmukhi: 'g21', shabads: null });
   });
 
+  it('keeps which scripture each line is from', async () => {
+    const r = await searchContains('ੴ', {}, 0);
+    expect(r.lines[0].source_fk).toBe(1);
+  });
+
   // A full count of a broad query (ਹਰਿ: 8,824 lines) scans most of the table
   // and, cold, passed the anon timeout alongside the page itself (#50).
   it('caps the count so a broad query never scans the whole table', async () => {

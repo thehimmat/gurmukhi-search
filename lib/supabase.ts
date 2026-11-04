@@ -69,6 +69,8 @@ export type NumeralMatch = {
 
 export type LineWithMeta = Line & {
   shabads: Shabad | null;
+  // sources.id — which scripture. Every line-search RPC returns it.
+  source_fk?: number;
   numeral?: NumeralMatch;
 };
 

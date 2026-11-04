@@ -6,6 +6,8 @@ import { FuzzyLevel, fuzzyHighlightSpans } from '@/lib/fuzzy';
 import { lineHref } from '@/lib/viewer';
 import { containsSpans } from '@/lib/contains';
 import { snapToClusters } from '@/lib/gurmukhi-clusters';
+import { sourceById } from '@/lib/sources';
+import { useSources } from './SourcesContext';
 
 type Props = {
   line: LineWithMeta;
@@ -54,6 +56,11 @@ function Marked({ text, spans }: { text: string; spans: { start: number; end: nu
 
 export default function ResultCard({ line, query, mode, fuzzyLevel = 0 }: Props) {
   const shabad = line.shabads;
+  // Named the way the reading feed's ShabadCard does: Sri Guru Granth Sahib Ji
+  // stays a plain "Ang N"; other scriptures give their name and page unit.
+  const { sources } = useSources();
+  const source = line.source_fk != null ? sourceById(sources, line.source_fk) : undefined;
+  const sggs = source?.slug === 'sggs';
 
   return (
     // The whole card opens the line in its shabad (the kosh viewer).
@@ -102,8 +109,9 @@ export default function ResultCard({ line, query, mode, fuzzyLevel = 0 }: Props)
 
       {/* Metadata row */}
       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#7a6045]">
+        {source && !sggs && <span className="font-medium">{source.name}</span>}
         <span>
-          <span className="font-medium">Ang</span> {line.ang}
+          <span className="font-medium">{source?.pageUnit ?? 'Ang'}</span> {line.ang}
         </span>
         {shabad?.raag_english && (
           <span>
