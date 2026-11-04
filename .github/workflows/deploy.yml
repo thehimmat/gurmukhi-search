@@ -1,6 +1,6 @@
 name: Deploy
 
-# On every push to main: typecheck and test, build the shell's arm64 image, push it to GHCR, and
+# On every push to main: typecheck, lint and test, build the shell's arm64 image, push it to GHCR, and
 # deploy it on the VM next to the kosh app (gurmukhi-kosh selfhost/README.md, "The apps"). A new
 # image ends with a Cloudflare purge of the site, since cached pages name the old build's /_next
 # chunks, which the new image doesn't have. Pull requests run the checks only.
@@ -30,6 +30,7 @@ jobs:
           node-version: 22
       - run: npm ci --no-audit --no-fund
       - run: npx tsc --noEmit
+      - run: npm run lint
       - run: npm test
 
   image:
