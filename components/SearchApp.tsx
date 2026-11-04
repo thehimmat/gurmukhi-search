@@ -25,6 +25,9 @@ import { NoResults, ResultCount } from '@/components/ResultStatus';
 import { ErrorNotice } from '@/components/ErrorNotice';
 import { responseError, thrownError } from '@/lib/client-errors';
 import { searchFailed } from '@/lib/search-state';
+import { parseAppMode, searchHref, type AppMode } from '@/lib/app-url';
+import { LatestRequest } from '@/lib/latest-request';
+import { submitTarget } from '@/lib/kosh-submit';
 import { fetchWords, type WordFilters, type WordHit } from '@/lib/words-client';
 import type {
   SearchFilters,
@@ -42,12 +45,13 @@ type SearchMode = 'contains' | 'first_letter' | 'pattern' | 'letterset';
 
 // Pause after the last keystroke before searching.
 const SEARCH_DEBOUNCE_MS = 250;
-type AppMode = 'gurbani' | 'kosh';
 
 type SearchState = {
   lines: LineWithMeta[];
   words: Word[];
   total: number | null; // null = unknown total (line scope); use hasMore instead
+  // The total is a lower bound (the count stopped at its cap); use hasMore.
+  totalCapped: boolean;
   hasMore: boolean; // used when total is null
   page: number;
   loading: boolean;
@@ -117,12 +121,13 @@ function SegmentedControl({ value, onChange }: { value: AppMode; onChange: (v: A
   );
 }
 
-function KoshSearch({ writers, corpora, metaFailed, onRetryMeta }: {
+function KoshSearch({ query, setQuery, writers, corpora, metaFailed, onRetryMeta }: {
+  // Lifted to SearchPage, which keeps it in the URL.
+  query: string; setQuery: (q: string) => void;
   writers: WriterFacet[]; corpora: CorpusFacet[]; metaFailed: boolean; onRetryMeta: () => void;
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [query, setQuery] = useState('');
   const [results, setResults] = useState<WordHit[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -154,6 +159,8 @@ function KoshSearch({ writers, corpora, metaFailed, onRetryMeta }: {
         setSettled(q);
       } catch (e) {
         if ((e as Error).name === 'AbortError') return;
+        // Don't leave the previous query's words up beside the error.
+        setResults([]);
         setError(thrownError(e));
         setSettled(q);
       } finally {
@@ -163,9 +170,20 @@ function KoshSearch({ writers, corpora, metaFailed, onRetryMeta }: {
     return () => { clearTimeout(t); ctrl.abort(); };
   }, [query, fuzzy.level, filters, attempt]);
 
-  function handleSubmit(e: React.SyntheticEvent) {
+  const open = (word: string) => router.push(`/word/${encodeURIComponent(word)}`);
+
+  async function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault();
-    if (results[0]) router.push(`/word/${encodeURIComponent(results[0].gurmukhi)}`);
+    const target = submitTarget(query, settled, results);
+    if (target.kind === 'open') open(target.word);
+    if (target.kind !== 'lookup') return;
+    // The results on screen are for an earlier query: look this one up first.
+    try {
+      const words = await fetchWords(target.query, fuzzy.level, undefined, filters);
+      if (words[0]) open(words[0].gurmukhi);
+    } catch {
+      // The debounced lookup for this query reports the error.
+    }
   }
 
   return (
@@ -282,7 +300,7 @@ function KoshSearch({ writers, corpora, metaFailed, onRetryMeta }: {
         <NoResults query={settled} />
       )}
 
-      {!query && (
+      {!query.trim() && (
         <div style={{ marginTop: '1.5rem' }}>
           <WordFeed />
         </div>
@@ -293,11 +311,14 @@ function KoshSearch({ writers, corpora, metaFailed, onRetryMeta }: {
 
 function SearchPage() {
   const searchParams = useSearchParams();
+  const initialMode = parseAppMode(searchParams.get('mode'));
   const initialQuery = searchParams.get('q') ?? '';
-  const initialMode = (searchParams.get('mode') as AppMode) ?? 'gurbani';
 
   const [appMode, setAppMode] = useState<AppMode>(initialMode);
-  const [query, setQuery] = useState(initialQuery);
+  // Each zone keeps its own box; the URL holds the one showing.
+  const [query, setQuery] = useState(initialMode === 'gurbani' ? initialQuery : '');
+  const [koshQuery, setKoshQuery] = useState(initialMode === 'kosh' ? initialQuery : '');
+  const router = useRouter();
   const [searchMode, setSearchMode] = useState<SearchMode>('contains');
   const [patternScope, setPatternScope] = useState<Scope>('line');
   const [letterSet, setLetterSet] = useState<LetterSetQuery>(DEFAULT_LETTER_SET_QUERY);
@@ -319,6 +340,7 @@ function SearchPage() {
     lines: [],
     words: [],
     total: 0,
+    totalCapped: false,
     hasMore: false,
     page: 0,
     loading: false,
@@ -330,7 +352,7 @@ function SearchPage() {
   });
   const [metaFailed, setMetaFailed] = useState(false);
 
-  const abortRef = useRef<AbortController | null>(null);
+  const [request] = useState(() => new LatestRequest());
   // Latest mode-specific inputs, so load-more / filter re-runs read fresh values.
   const patternScopeRef = useRef(patternScope);
   patternScopeRef.current = patternScope;
@@ -362,13 +384,14 @@ function SearchPage() {
     const isLetterSet = m === 'letterset';
     const empty = isLetterSet ? letterSetRef.current.letters.length === 0 : !q.trim();
     if (empty) {
+      // Abort first: a slow response for the old query would otherwise land
+      // after this and bring its results back over the feed (#49).
+      request.cancel();
       setState(s => ({ ...s, lines: [], words: [], total: 0, error: null, loadMoreError: null, loading: false, loadingMore: false, committedQuery: '' }));
       return;
     }
 
-    abortRef.current?.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
+    const signal = request.start();
 
     // A new first page keeps the previous results on screen until it lands, so
     // typing doesn't flash the list empty on every keystroke.
@@ -421,13 +444,14 @@ function SearchPage() {
     }
 
     try {
-      const res = await fetch(`/api/search?${params}`, { signal: ctrl.signal });
+      const res = await fetch(`/api/search?${params}`, { signal });
       if (!res.ok) {
         const message = await responseError(res);
-        if (!ctrl.signal.aborted) setState(s => searchFailed(s, page, message));
+        if (!signal.aborted) setState(s => searchFailed(s, page, message));
         return;
       }
       const json = await res.json();
+      if (signal.aborted) return;
 
       setState(s => ({
         loading: false,
@@ -437,6 +461,7 @@ function SearchPage() {
         // Totals and role counts come with the first page only (kosh 052);
         // later pages keep the ones already shown.
         total: page === 0 ? json.total : (json.total ?? s.total),
+        totalCapped: page === 0 ? !!json.totalCapped : s.totalCapped,
         hasMore: json.hasMore ?? false,
         page,
         committedQuery: isLetterSet ? 'letterset' : q,
@@ -450,7 +475,7 @@ function SearchPage() {
         setState(s => searchFailed(s, page, thrownError(e)));
       }
     }
-  }, []);
+  }, [request]);
 
   function handleSubmit() { runSearch(query, searchMode, filtersRef.current, 0); }
 
@@ -459,10 +484,29 @@ function SearchPage() {
   // newer one. Letter Set has its own builder and still searches on submit.
   useEffect(() => {
     if (appMode !== 'gurbani' || searchMode === 'letterset') return;
-    const t = setTimeout(() => runSearch(query, searchMode, filtersRef.current, 0), SEARCH_DEBOUNCE_MS);
+    // Clearing the box takes effect at once, not after the pause.
+    const delay = query.trim() ? SEARCH_DEBOUNCE_MS : 0;
+    const t = setTimeout(() => runSearch(query, searchMode, filtersRef.current, 0), delay);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, searchMode, appMode, fuzzy.level]);
+  // Keep the zone and what's typed in the URL, at the search's own pace, so
+  // refresh, Back and shared links keep the search (#49).
+  const shownQuery = appMode === 'kosh' ? koshQuery : query;
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const href = searchHref(appMode, shownQuery);
+      if (href !== window.location.pathname + window.location.search) router.replace(href, { scroll: false });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [appMode, shownQuery, router]);
+
+  function switchApp(next: AppMode) {
+    request.cancel();
+    setState(s => ({ ...s, loading: false, loadingMore: false }));
+    setAppMode(next);
+  }
+
   function handleLoadMore() {
     if (state.loading) return;
     runSearch(state.committedQuery, searchMode, filters, state.page + 1);
@@ -510,7 +554,7 @@ function SearchPage() {
   const hasResults = items.length > 0;
   const showed     = items.length;
   const total      = state.total;
-  const hasMore    = total === null ? state.hasMore : showed < total;
+  const hasMore    = total === null || state.totalCapped ? state.hasMore : showed < total;
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100%' }}>
@@ -518,12 +562,14 @@ function SearchPage() {
       {/* Segmented control bar */}
       <div style={{ borderBottom: '1px solid var(--border)', background: 'white', padding: '0.75rem 1.5rem' }}>
         <div style={{ maxWidth: '860px', margin: '0 auto' }}>
-          <SegmentedControl value={appMode} onChange={setAppMode} />
+          <SegmentedControl value={appMode} onChange={switchApp} />
         </div>
       </div>
 
       {/* Kosh mode */}
-      {appMode === 'kosh' && <KoshSearch writers={writers} corpora={corpora} metaFailed={metaFailed} onRetryMeta={loadMeta} />}
+      {appMode === 'kosh' && (
+        <KoshSearch query={koshQuery} setQuery={setKoshQuery} writers={writers} corpora={corpora} metaFailed={metaFailed} onRetryMeta={loadMeta} />
+      )}
 
       {/* Gurbani search mode */}
       {appMode === 'gurbani' && (
@@ -532,8 +578,10 @@ function SearchPage() {
             <ModeSelector
               value={searchMode}
               onChange={m => {
+                // The old mode's request must not land in the new mode (#49).
+                request.cancel();
                 setSearchMode(m);
-                setState(s => ({ ...s, lines: [], words: [], total: 0, error: null, loadMoreError: null, committedQuery: '' }));
+                setState(s => ({ ...s, lines: [], words: [], total: 0, loading: false, loadingMore: false, error: null, loadMoreError: null, committedQuery: '' }));
               }}
             />
           </div>
@@ -601,7 +649,7 @@ function SearchPage() {
           <div style={{ maxWidth: '860px', margin: '0 auto', padding: '0.5rem 1.5rem 3rem' }}>
             {(hasResults || state.loading) && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', fontSize: '0.875rem', color: 'var(--text-secondary)', fontFamily: '"Inter", sans-serif' }}>
-                {hasResults && <ResultCount showed={showed} total={total} hasMore={hasMore} />}
+                {hasResults && <ResultCount showed={showed} total={total} capped={state.totalCapped} hasMore={hasMore} />}
                 {state.loading && <span style={{ color: 'var(--accent)' }} className="animate-pulse">{searchingLabel(searchMode === 'contains' || searchMode === 'first_letter' ? fuzzy.level : 0)}</span>}
               </div>
             )}

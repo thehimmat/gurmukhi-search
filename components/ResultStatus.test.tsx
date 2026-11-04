@@ -10,6 +10,10 @@ describe('ResultCount', () => {
     expect(text(<ResultCount showed={1} total={1} hasMore={false} />)).toBe('Showing 1 of 1 result');
   });
 
+  it('reads a capped total as "at least"', () => {
+    expect(text(<ResultCount showed={20} total={1000} capped hasMore />)).toBe('Showing 20 of 1,000+ results');
+  });
+
   it('says "20+" while more are known to exist but not how many', () => {
     expect(text(<ResultCount showed={20} total={null} hasMore />)).toBe('Showing 20+ results');
   });
