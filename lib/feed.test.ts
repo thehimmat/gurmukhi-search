@@ -52,7 +52,7 @@ describe('takeShabads', () => {
     expect(r.cursor?.verse).toBe(2);
   });
 
-  it('groups lines without a shabad (Sarbloh) by ang', () => {
+  it('groups lines without a shabad id by ang', () => {
     const r = takeShabads([line(1, null, 5, 20, 4), line(2, null, 5, 20, 4), line(3, null, 6, 20, 4)], 20, false);
     expect(r.groups.map(g => g.lines.length)).toEqual([2, 1]);
   });

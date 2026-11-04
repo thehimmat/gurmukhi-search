@@ -17,7 +17,7 @@ const MODES: { id: Mode; label: string; desc: string; hidden?: boolean }[] = [
   {
     id: 'first_letter',
     label: 'First Letter',
-    desc: 'Anagram search — match first letter of each word (like igurbani)',
+    desc: 'Anagram search — match first letter of each word (like iGurbani)',
   },
   {
     id: 'pattern',

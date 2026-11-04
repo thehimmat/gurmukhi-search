@@ -588,7 +588,7 @@ function SearchPage() {
 
           <div style={{ maxWidth: '860px', margin: '0 auto', padding: '0.75rem 1.5rem 0' }}>
             {searchMode === 'letterset' ? (
-              <LetterSetBuilder query={letterSet} onChange={setLetterSet} onSubmit={handleSubmit} />
+              <LetterSetBuilder query={letterSet} onChange={setLetterSet} onSubmit={handleSubmit} layout={layout} />
             ) : (
               <SearchBar
                 value={query}
@@ -664,6 +664,7 @@ function SearchPage() {
                 onFilterChange={setWordFilter}
                 filterMode={wordFilterMode}
                 onFilterModeChange={setWordFilterMode}
+                layout={layout}
               />
             )}
 
