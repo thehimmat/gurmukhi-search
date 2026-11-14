@@ -16,14 +16,14 @@ several different ways.
 
 ## Stack
 
-Next.js (App Router), TypeScript, Tailwind CSS, backed by a Postgres (Supabase) corpus of SGGS
-with PL/pgSQL search functions. Gurmukhi keyboard input comes from a shared transliteration
+Next.js (App Router), TypeScript, Tailwind CSS, backed by gurmukhi-kosh's self-hosted Postgres + PostgREST
+(queried with supabase-js) and its PL/pgSQL search functions. Gurmukhi keyboard input comes from a shared transliteration
 package used across the suite.
 
 ## Run locally
 
 ```bash
-cp .env.example .env.local   # add your Supabase URL + anon key
+cp .env.example .env.local   # URL is set; add the anon key (see the file)
 npm install
 npm run dev                  # http://localhost:3000
 ```
